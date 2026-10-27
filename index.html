@@ -1,0 +1,1640 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#0b6e66">
+<meta name="mobile-web-app-capable" content="yes">
+<title>AS-DT1 Mobile</title>
+<style>
+/* Layout: one-screen field tool. Header (status) / main panel / control bar / tab bar. Light-first, high contrast for sunlight. */
+:root {
+  --bg: #f3f5f2;        /* page */
+  --surface: #ffffff;   /* cards, canvases */
+  --ink: #15201b;       /* text */
+  --muted: #5b6a63;     /* secondary text */
+  --line: #d3dbd6;      /* borders */
+  --accent: #0b6e66;    /* connection / primary action (teal) */
+  --accent-ink: #ffffff;
+  --rec: #d1480a;       /* recording (survey orange) */
+  --ok: #2f7d4f; --warn: #a66a00; --bad: #b42318;
+  --canvas: #0e1513;    /* dark field behind depth image for colour reading */
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans JP", "Hiragino Sans", sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, "Noto Sans Mono", monospace;
+  --radius: 10px;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1412; --surface: #182019; --ink: #e5ebe7; --muted: #9aa8a0; --line: #2c3731;
+    --accent: #2fc4b4; --accent-ink: #06201d; --rec: #ff8c42; --ok: #5fcf8a; --warn: #e3a93a; --bad: #ff6b5e; --canvas: #060908;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1412; --surface: #182019; --ink: #e5ebe7; --muted: #9aa8a0; --line: #2c3731;
+  --accent: #2fc4b4; --accent-ink: #06201d; --rec: #ff8c42; --ok: #5fcf8a; --warn: #e3a93a; --bad: #ff6b5e; --canvas: #060908;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 15px; line-height: 1.45; -webkit-text-size-adjust: 100%; overscroll-behavior: none; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+.app { height: 100%; display: flex; flex-direction: column; }
+.top { display: flex; align-items: center; gap: 10px; padding: 8px max(16px, env(safe-area-inset-right, 0px)) 8px max(16px, env(safe-area-inset-left, 0px)); padding-top: calc(8px + env(safe-area-inset-top, 0px)); border-bottom: 1px solid var(--line); background: var(--surface); }
+.brand { font-weight: 700; letter-spacing: .02em; white-space: nowrap; }
+.brand small { font-weight: 500; color: var(--muted); margin-left: 4px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-left: auto; justify-content: flex-end; }
+.chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--line); font-size: 12.5px; font-variant-numeric: tabular-nums; background: var(--bg); white-space: nowrap; }
+.chip::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.chip.on::before { background: var(--ok); }
+.chip.busy::before { background: var(--warn); }
+.chip.rec { border-color: var(--rec); color: var(--rec); font-weight: 700; }
+.chip.rec::before { background: var(--rec); animation: blink 1s steps(2, start) infinite; }
+.chip.gps.fix::before { background: var(--ok); }
+.chip.gps.poor::before { background: var(--warn); }
+@keyframes blink { 50% { opacity: .2; } }
+@media (prefers-reduced-motion: reduce) { .chip.rec::before { animation: none; } }
+.banner { padding: 8px max(16px, env(safe-area-inset-right, 0px)) 8px max(16px, env(safe-area-inset-left, 0px)); background: color-mix(in srgb, var(--warn) 14%, var(--surface)); border-bottom: 1px solid var(--line); font-size: 13.5px; }
+.banner.bad { background: color-mix(in srgb, var(--bad) 14%, var(--surface)); }
+.banner button { margin-left: 8px; }
+main { flex: 1; min-height: 0; overflow: auto; padding: 10px max(16px, env(safe-area-inset-right, 0px)) 12px max(16px, env(safe-area-inset-left, 0px)); }
+.panel { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.stat { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 6px 8px; min-width: 0; }
+.stat .k { font-size: 11px; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stat .v { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.2; white-space: nowrap; }
+.stat .v small { font-size: 11px; font-weight: 500; color: var(--muted); margin-left: 2px; }
+canvas.view { width: 100%; max-width: 100%; display: block; background: var(--canvas); border-radius: var(--radius); touch-action: none; }
+.legend { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.legend .bar { flex: 1; height: 10px; border-radius: 5px; background: linear-gradient(90deg, #30123b, #4662d7, #36aaf9, #1ae4b6, #72fe5e, #c8ef34, #faba39, #f66b19, #ca2a04, #7a0403); }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.row > * { min-width: 0; }
+.info { font-size: 13.5px; font-variant-numeric: tabular-nums; color: var(--muted); }
+.info b { color: var(--ink); }
+.ctrl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; padding: 8px max(16px, env(safe-area-inset-right, 0px)) 8px max(16px, env(safe-area-inset-left, 0px)); border-top: 1px solid var(--line); background: var(--surface); }
+.ctrl button { height: 46px; border-radius: var(--radius); border: 1px solid var(--line); background: var(--bg); font-weight: 600; font-size: 15px; padding: 0 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ctrl button:disabled { opacity: .45; cursor: default; }
+.ctrl button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.ctrl button.recbtn { color: var(--rec); border-color: var(--rec); }
+.ctrl button.recbtn.active { background: var(--rec); color: #fff; }
+button:focus-visible, input:focus-visible, select:focus-visible, .tabs button:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 60%, transparent); outline-offset: 1px; }
+.tabs { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); background: var(--surface); border-top: 1px solid var(--line); padding: 4px max(8px, env(safe-area-inset-right, 0px)) calc(4px + env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-left, 0px)); }
+.tabs button { border: 0; background: transparent; padding: 7px 2px 5px; font-size: 12px; color: var(--muted); border-radius: 8px; display: flex; flex-direction: column; align-items: center; gap: 2px; white-space: nowrap; }
+.tabs button svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.tabs button.active { color: var(--accent); font-weight: 700; }
+.btn { height: 40px; padding: 0 14px; border-radius: var(--radius); border: 1px solid var(--line); background: var(--surface); font-weight: 600; }
+.btn.small { height: 34px; padding: 0 10px; font-size: 13.5px; font-weight: 500; }
+.btn.accent { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn.danger { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 50%, var(--line)); }
+.btn:disabled { opacity: .45; cursor: default; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; min-width: 0; }
+.card h3 { margin: 0 0 6px; font-size: 14px; letter-spacing: .02em; }
+.kv { display: grid; grid-template-columns: minmax(0, 11em) minmax(0, 1fr); gap: 3px 10px; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+.kv div:nth-child(odd) { color: var(--muted); }
+.kv div:nth-child(even) { overflow-wrap: anywhere; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; background: var(--surface); padding: 6px 12px; font-size: 13.5px; }
+.seg button.active { background: var(--accent); color: var(--accent-ink); }
+pre.mono, .console-out { font-family: var(--mono); font-size: 12.5px; white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 10px; max-height: 50vh; overflow: auto; }
+.console-in { display: flex; gap: 6px; }
+.console-in input { flex: 1; min-width: 0; height: 40px; border-radius: var(--radius); border: 1px solid var(--line); padding: 0 10px; background: var(--surface); font-family: var(--mono); }
+.reclist { display: flex; flex-direction: column; gap: 8px; }
+.recitem { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 10px; align-items: center; }
+.recitem .name { font-weight: 700; }
+.recitem .meta { font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.recitem .acts { display: flex; flex-wrap: wrap; gap: 6px; grid-column: 1 / -1; }
+.log { font-family: var(--mono); font-size: 12px; }
+.log .warn { color: var(--warn); } .log .error { color: var(--bad); } .log .ok { color: var(--ok); }
+dialog { border: 1px solid var(--line); border-radius: 14px; background: var(--surface); color: var(--ink); width: min(92vw, 520px); padding: 16px; max-height: 88vh; overflow: auto; }
+dialog::backdrop { background: rgba(0, 0, 0, .45); }
+dialog h2 { margin: 0 0 10px; font-size: 17px; }
+.form { display: grid; gap: 10px; }
+.form label { display: grid; gap: 4px; font-size: 13.5px; color: var(--muted); }
+.form label > span b { color: var(--ink); }
+.form input[type="number"], .form input[type="text"], .form select { height: 40px; border-radius: 8px; border: 1px solid var(--line); padding: 0 10px; background: var(--bg); color: var(--ink); width: 100%; }
+.form .check { display: flex; align-items: center; gap: 8px; color: var(--ink); }
+.form .check input { width: 20px; height: 20px; }
+.dlg-acts { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+.hint { font-size: 12.5px; color: var(--muted); }
+.quick { display: flex; flex-wrap: wrap; gap: 6px; }
+.pointinfo { font-variant-numeric: tabular-nums; font-size: 13.5px; }
+.empty { color: var(--muted); text-align: center; padding: 24px 8px; }
+.progress { height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; }
+.progress > div { height: 100%; background: var(--accent); width: 0; }
+@media (min-width: 700px) { main { max-width: 760px; margin: 0 auto; width: 100%; } .ctrl, .tabs { max-width: 760px; margin: 0 auto; width: 100%; } .stats { grid-template-columns: repeat(8, minmax(0, 1fr)); } }
+
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="brand">AS-DT1 <small>Mobile</small></div>
+    <div class="chips">
+      <span id="chipConn" class="chip">未接続</span>
+      <span id="chipMode" class="chip" hidden>--</span>
+      <span id="chipGps" class="chip gps" hidden>GPS</span>
+      <span id="chipRec" class="chip rec" hidden>REC</span>
+    </div>
+  </header>
+  <div id="banner" class="banner" hidden></div>
+  <main id="main">
+    <!-- 距離画像 -->
+    <section id="tab-live" class="panel">
+      <div class="stats">
+        <div class="stat"><div class="k">コマ/秒</div><div class="v" id="stFps">--</div></div>
+        <div class="stat"><div class="k">有効点</div><div class="v" id="stValid">--<small>%</small></div></div>
+        <div class="stat"><div class="k">距離 中央値</div><div class="v" id="stMed">--<small>m</small></div></div>
+        <div class="stat"><div class="k">センサ温度</div><div class="v" id="stTemp">--<small>℃</small></div></div>
+        <div class="stat"><div class="k">距離範囲</div><div class="v" id="stRange">--</div></div>
+        <div class="stat"><div class="k">見下ろし角</div><div class="v" id="stTilt">--<small>°</small></div></div>
+        <div class="stat"><div class="k">記録</div><div class="v" id="stRec">--</div></div>
+        <div class="stat"><div class="k">GPS精度</div><div class="v" id="stGps">--<small>m</small></div></div>
+      </div>
+      <canvas id="depth" class="view" aria-label="距離画像"></canvas>
+      <div class="legend"><span>近</span><span id="lgMin">0.0 m</span><div class="bar"></div><span id="lgMax">30.0 m</span><span>遠</span></div>
+      <div class="row">
+        <div class="pointinfo" id="pointInfo">画像をタップすると、その点の座標を表示します。</div>
+      </div>
+      <div class="row" id="liveEmpty">
+        <div class="hint">「接続」でAS-DT1（USB）を選び、「計測開始」で距離画像が動きます。機器が手元にないときは「設定 → 模擬センサー」で画面を試せます。</div>
+      </div>
+    </section>
+    <!-- 3D -->
+    <section id="tab-3d" class="panel" hidden>
+      <canvas id="view3d" class="view" aria-label="3D点群"></canvas>
+      <div class="row">
+        <div class="seg" id="seg3dColor"><button data-v="h" class="active">色＝高さ</button><button data-v="d">色＝距離</button></div>
+        <button class="btn small" id="btn3dReset">視点リセット</button>
+        <span class="hint">ドラッグ＝回転 / 2本指＝拡大縮小</span>
+      </div>
+      <div class="info">右＝＋x、上＝＋y、前方＝＋z（センサから見た向き、単位m）。<span id="info3d"></span></div>
+    </section>
+    <!-- 断面 -->
+    <section id="tab-profile" class="panel" hidden>
+      <div class="row">
+        <div class="seg" id="segProfile"><button data-v="side" class="active">側面図（横＝前方距離、縦＝上下）</button><button data-v="plan">平面図（横＝左右、縦＝前方）</button></div>
+      </div>
+      <canvas id="profile" class="view" aria-label="断面図"></canvas>
+      <div class="info" id="infoProfile">センサを原点（0,0）として、測った点をそのまま並べた図です。草面が斜めの一枚面として見えれば、構えは良好です。</div>
+    </section>
+    <!-- 情報 -->
+    <section id="tab-info" class="panel" hidden>
+      <div class="card"><h3>機器情報</h3><div class="kv" id="kvDevice"><div>状態</div><div>未接続</div></div></div>
+      <div class="card"><h3>いまの設定（機器側）</h3><div class="kv" id="kvSettings"></div></div>
+      <div class="card">
+        <h3>診断</h3>
+        <div class="quick">
+          <button class="btn small" data-cmd="diag">自己診断 (diag)</button>
+          <button class="btn small" data-cmd="errinfo">エラー情報 (errinfo)</button>
+          <button class="btn small" data-cmd="ustatus">USB給電状態 (ustatus)</button>
+          <button class="btn small" data-cmd="flshow">保存設定一覧 (flshow)</button>
+          <button class="btn small" data-cmd="ver">バージョン (ver)</button>
+          <button class="btn small" data-cmd="ts">タイムスタンプ (ts)</button>
+        </div>
+      </div>
+      <div class="card">
+        <h3>コマンド送信（上級者向け）</h3>
+        <div class="hint">Sonyのマニュアルにあるコマンドをそのまま送れます。応答はそのまま表示します。</div>
+        <div class="console-in" style="margin-top:6px"><input id="consoleIn" type="text" placeholder="例: cstatus" autocomplete="off" autocapitalize="off"><button class="btn" id="consoleSend">送信</button></div>
+        <div class="console-out" id="consoleOut" style="margin-top:8px">（ここに応答が表示されます）</div>
+      </div>
+    </section>
+    <!-- 記録 -->
+    <section id="tab-rec" class="panel" hidden>
+      <div class="card">
+        <h3>保存先（この端末のブラウザ内）</h3>
+        <div class="info" id="storageInfo">--</div>
+        <div class="progress" style="margin-top:6px"><div id="storageBar"></div></div>
+        <div class="hint" style="margin-top:6px">記録はまずブラウザ内に安全に溜まります。「保存」でダウンロードフォルダへ、「共有」でDrive/OneDriveアプリ等へ渡せます。PCでは変換スクリプト（asdt1_convert.py）でPLY・CSV・GPXに展開します。</div>
+      </div>
+      <div class="reclist" id="recList"><div class="empty">記録はまだありません</div></div>
+      <div class="row"><button class="btn small" id="btnRefreshRec">一覧を更新</button><button class="btn small danger" id="btnDeleteAll">すべて削除</button></div>
+    </section>
+    <!-- ログ -->
+    <section id="tab-log" class="panel" hidden>
+      <div class="row"><button class="btn small" id="btnCopyLog">ログをコピー</button><button class="btn small" id="btnClearLog">消去</button><span class="hint">不具合のときはこのログをコピーして共有してください。</span></div>
+      <pre class="mono log" id="logView"></pre>
+    </section>
+  </main>
+  <div class="ctrl">
+    <button id="btnConnect" class="primary">接続</button>
+    <button id="btnMeasure" disabled>計測開始</button>
+    <button id="btnRecord" class="recbtn" disabled>● 記録</button>
+    <button id="btnSingle" disabled>1コマ撮影</button>
+    <button id="btnMark" disabled>マーカー</button>
+    <button id="btnSettings">設定</button>
+  </div>
+  <nav class="tabs" id="tabs">
+    <button data-tab="live" class="active"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg>距離画像</button>
+    <button data-tab="3d"><svg viewBox="0 0 24 24"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg>3D</button>
+    <button data-tab="profile"><svg viewBox="0 0 24 24"><path d="M3 20h18M3 20V4"/><path d="M5 16c3-1 5-6 8-7s4 3 7 2"/></svg>断面</button>
+    <button data-tab="info"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>情報</button>
+    <button data-tab="rec"><svg viewBox="0 0 24 24"><path d="M4 7h16v12H4z"/><path d="M8 7V5h8v2"/><circle cx="12" cy="13" r="3"/></svg>記録</button>
+    <button data-tab="log"><svg viewBox="0 0 24 24"><path d="M5 4h14v16H5z"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>ログ</button>
+  </nav>
+</div>
+
+<dialog id="dlgSettings">
+  <h2>設定</h2>
+  <form class="form" method="dialog" id="formSettings">
+    <label><span><b>測定レンジ</b>（機器を再起動して切り替え）</span>
+      <select id="setMode"></select>
+      <span class="hint">屋外の堤防調査は 30m 15fps（30M15F）。切替時はUSBが一度切れ、自動で再接続します。</span></label>
+    <label><span><b>連続計測の間隔</b></span>
+      <select id="setFsync"><option value="-1">最速（レンジで決まる 15 または 30コマ/秒）</option><option value="100">100 ms（10コマ/秒）</option><option value="200">200 ms（5コマ/秒）</option><option value="500">500 ms（2コマ/秒）</option><option value="1000">1000 ms（1コマ/秒）</option></select></label>
+    <label class="check"><input type="checkbox" id="setImu" checked><span>IMU（加速度・角速度）も一緒に記録する</span></label>
+    <label class="check"><input type="checkbox" id="setGps" checked><span>スマホのGPS位置を記録する</span></label>
+    <label class="check"><input type="checkbox" id="setWake" checked><span>計測中は画面を消さない</span></label>
+    <label class="check"><input type="checkbox" id="setSecond" checked><span>表示で第1反射が無効なら第2反射を使う（Sonyアプリと同じ）</span></label>
+    <label><span><b>色の範囲</b></span>
+      <div class="row"><label class="check" style="margin:0"><input type="checkbox" id="setColorAuto" checked><span>自動</span></label>
+      <input type="number" id="setColorMin" step="0.1" min="0" placeholder="近 m" style="width:7em"><span>〜</span><input type="number" id="setColorMax" step="0.1" min="0" placeholder="遠 m" style="width:7em"></div></label>
+    <label><span><b>記録名の接頭語</b></span><input type="text" id="setPrefix" value="REC" maxlength="12"></label>
+    <label class="check"><input type="checkbox" id="setSim"><span><b>模擬センサー</b>（機器なしで画面を試す）</span></label>
+    <label class="check"><input type="checkbox" id="setFlip"><span>並び替え表を反転（距離画像の行並びが不自然なときだけ）</span></label>
+    <div class="dlg-acts"><button type="button" class="btn" id="setCancel">閉じる</button><button type="submit" class="btn accent" id="setApply">適用</button></div>
+  </form>
+</dialog>
+
+<dialog id="dlgMark">
+  <h2>マーカーを記録</h2>
+  <div class="hint">いまの時刻とGPS位置にメモを付けます（距離標の通過、区間の始まり・終わりなど）。</div>
+  <div class="quick" style="margin:10px 0" id="markQuick">
+    <button class="btn small" data-text="区間開始">区間開始</button><button class="btn small" data-text="区間終了">区間終了</button><button class="btn small" data-text="距離標">距離標</button><button class="btn small" data-text="停止3秒">停止3秒</button><button class="btn small" data-text="較正ショット">較正ショット</button>
+  </div>
+  <form method="dialog" class="form" id="formMark">
+    <label><span>メモ</span><input type="text" id="markText" placeholder="例: 距離標 No.40" maxlength="80"></label>
+    <div class="dlg-acts"><button type="button" class="btn" id="markCancel">閉じる</button><button type="submit" class="btn accent">記録する</button></div>
+  </form>
+</dialog>
+
+<dialog id="dlgConfirm">
+  <h2 id="confirmTitle">確認</h2>
+  <div id="confirmText"></div>
+  <div class="dlg-acts"><button class="btn" id="confirmNo">やめる</button><button class="btn danger" id="confirmYes">実行</button></div>
+</dialog>
+
+<script>
+/* ===== AS-DT1 Mobile — core (no DOM): tables, decoder, protocol parser, simulator =====
+   Protocol source: Sony "AS-DT1 API Manual Ver.1.01" and SDK_for_AS-DT1_Ver1.01 (as_dt1_api_pcd.py).
+   Units: device outputs 0.25 mm units; this file keeps integers in 0.25 mm and floats in mm unless noted. */
+(function (root) {
+  'use strict';
+  const APP_VERSION = '1.0.0';
+  const USB_VID = 0x054C, USB_PID = 0x0FC4;
+  // Measurement range modes (API manual p.5)
+  const MODES = {
+    '20m':    { code: 1, n: 576, minMs: 33.33, label: '20m（近距離重視）' },
+    '30mstd': { code: 2, n: 576, minMs: 33.33, label: '30m 標準' },
+    '30m15f': { code: 3, n: 576, minMs: 66.66, label: '30m 15fps（屋外・長距離）' },
+    '30m30f': { code: 4, n: 288, minMs: 33.33, label: '30m 30fps（点数半分）' },
+    '40m':    { code: 5, n: 576, minMs: 66.66, label: '40m（屋内）' }
+  };
+  const MODE_BY_CODE = {}; for (const k in MODES) MODE_BY_CODE[MODES[k].code] = k;
+  // raw measurement-output order -> picture order: pic[k] = raw[MPDATATBL[k]]   (verified against lidar-viewer PLY)
+  const MPDATATBL = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,288,289,290,291,292,293,294,295,296,297,298,299,300,301,302,303,304,305,306,307,308,309,310,311,336,337,338,339,340,341,342,343,344,345,346,347,348,349,350,351,352,353,354,355,356,357,358,359,96,97,98,99,100,101,102,103,104,105,106,107,108,109,110,111,112,113,114,115,116,117,118,119,144,145,146,147,148,149,150,151,152,153,154,155,156,157,158,159,160,161,162,163,164,165,166,167,384,385,386,387,388,389,390,391,392,393,394,395,396,397,398,399,400,401,402,403,404,405,406,407,432,433,434,435,436,437,438,439,440,441,442,443,444,445,446,447,448,449,450,451,452,453,454,455,192,193,194,195,196,197,198,199,200,201,202,203,204,205,206,207,208,209,210,211,212,213,214,215,240,241,242,243,244,245,246,247,248,249,250,251,252,253,254,255,256,257,258,259,260,261,262,263,480,481,482,483,484,485,486,487,488,489,490,491,492,493,494,495,496,497,498,499,500,501,502,503,528,529,530,531,532,533,534,535,536,537,538,539,540,541,542,543,544,545,546,547,548,549,550,551,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,312,313,314,315,316,317,318,319,320,321,322,323,324,325,326,327,328,329,330,331,332,333,334,335,360,361,362,363,364,365,366,367,368,369,370,371,372,373,374,375,376,377,378,379,380,381,382,383,120,121,122,123,124,125,126,127,128,129,130,131,132,133,134,135,136,137,138,139,140,141,142,143,168,169,170,171,172,173,174,175,176,177,178,179,180,181,182,183,184,185,186,187,188,189,190,191,408,409,410,411,412,413,414,415,416,417,418,419,420,421,422,423,424,425,426,427,428,429,430,431,456,457,458,459,460,461,462,463,464,465,466,467,468,469,470,471,472,473,474,475,476,477,478,479,216,217,218,219,220,221,222,223,224,225,226,227,228,229,230,231,232,233,234,235,236,237,238,239,264,265,266,267,268,269,270,271,272,273,274,275,276,277,278,279,280,281,282,283,284,285,286,287,504,505,506,507,508,509,510,511,512,513,514,515,516,517,518,519,520,521,522,523,524,525,526,527,552,553,554,555,556,557,558,559,560,561,562,563,564,565,566,567,568,569,570,571,572,573,574,575];
+  // mpinfo / svminfo order -> picture order: pic[k] = list[MPDATATBL_MPXY[k]]
+  const MPDATATBL_MPXY = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96,97,98,99,100,101,102,103,104,105,106,107,108,109,110,111,112,113,114,115,116,117,118,119,144,145,146,147,148,149,150,151,152,153,154,155,156,157,158,159,160,161,162,163,164,165,166,167,120,121,122,123,124,125,126,127,128,129,130,131,132,133,134,135,136,137,138,139,140,141,142,143,168,169,170,171,172,173,174,175,176,177,178,179,180,181,182,183,184,185,186,187,188,189,190,191,192,193,194,195,196,197,198,199,200,201,202,203,204,205,206,207,208,209,210,211,212,213,214,215,240,241,242,243,244,245,246,247,248,249,250,251,252,253,254,255,256,257,258,259,260,261,262,263,216,217,218,219,220,221,222,223,224,225,226,227,228,229,230,231,232,233,234,235,236,237,238,239,264,265,266,267,268,269,270,271,272,273,274,275,276,277,278,279,280,281,282,283,284,285,286,287,288,289,290,291,292,293,294,295,296,297,298,299,300,301,302,303,304,305,306,307,308,309,310,311,336,337,338,339,340,341,342,343,344,345,346,347,348,349,350,351,352,353,354,355,356,357,358,359,312,313,314,315,316,317,318,319,320,321,322,323,324,325,326,327,328,329,330,331,332,333,334,335,360,361,362,363,364,365,366,367,368,369,370,371,372,373,374,375,376,377,378,379,380,381,382,383,384,385,386,387,388,389,390,391,392,393,394,395,396,397,398,399,400,401,402,403,404,405,406,407,432,433,434,435,436,437,438,439,440,441,442,443,444,445,446,447,448,449,450,451,452,453,454,455,408,409,410,411,412,413,414,415,416,417,418,419,420,421,422,423,424,425,426,427,428,429,430,431,456,457,458,459,460,461,462,463,464,465,466,467,468,469,470,471,472,473,474,475,476,477,478,479,480,481,482,483,484,485,486,487,488,489,490,491,492,493,494,495,496,497,498,499,500,501,502,503,528,529,530,531,532,533,534,535,536,537,538,539,540,541,542,543,544,545,546,547,548,549,550,551,504,505,506,507,508,509,510,511,512,513,514,515,516,517,518,519,520,521,522,523,524,525,526,527,552,553,554,555,556,557,558,559,560,561,562,563,564,565,566,567,568,569,570,571,572,573,574,575];
+  // size index -> [width, height] in SPAD pixels (manual p.14: 0=2x2, 1=3x2, 2=2x3, 3=3x3)
+  const MPSIZE = [[2, 2], [3, 2], [2, 3], [3, 3]];
+  const SPAD_W = 170, SPAD_H = 140;
+  const INV_MPDATATBL = new Int32Array(576), INV_MPXY = new Int32Array(576);
+  for (let k = 0; k < 576; k++) { INV_MPDATATBL[MPDATATBL[k]] = k; INV_MPXY[MPDATATBL_MPXY[k]] = k; }
+
+  function latin1(bytes) { let s = ''; for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]); return s; }
+  const te = new TextEncoder();
+
+  /* ---------- binary point unpacking (manual p.9, SDK com_data_capture_ser_xyz_bin) ---------- */
+  // mp: Uint8Array of nPoints*15 bytes. Returns Int32Array(nPoints*6): x1,y1,z1,x2,y2,z2 in 0.25 mm units, raw order.
+  function unpackXYZ(mp, nPoints) {
+    const out = new Int32Array(nPoints * 6);
+    for (let i = 0, o = 0; i < nPoints; i++, o += 6) {
+      const b = i * 15;
+      let x1 = mp[b] << 12 | mp[b + 1] << 4 | mp[b + 2] >> 4;
+      let y1 = (mp[b + 2] & 0x0f) << 16 | mp[b + 3] << 8 | mp[b + 4];
+      const z1 = mp[b + 5] << 12 | mp[b + 6] << 4 | mp[b + 7] >> 4;
+      let x2 = (mp[b + 7] & 0x0f) << 16 | mp[b + 8] << 8 | mp[b + 9];
+      let y2 = mp[b + 10] << 12 | mp[b + 11] << 4 | mp[b + 12] >> 4;
+      const z2 = (mp[b + 12] & 0x0f) << 16 | mp[b + 13] << 8 | mp[b + 14];
+      if (x1 & 0x80000) x1 -= 0x100000;
+      if (y1 & 0x80000) y1 -= 0x100000;
+      if (x2 & 0x80000) x2 -= 0x100000;
+      if (y2 & 0x80000) y2 -= 0x100000;
+      out[o] = x1; out[o + 1] = y1; out[o + 2] = z1; out[o + 3] = x2; out[o + 4] = y2; out[o + 5] = z2;
+    }
+    return out;
+  }
+  // inverse of unpackXYZ (used by simulator and tests)
+  function packXYZ(vals, nPoints) {
+    const mp = new Uint8Array(nPoints * 15);
+    for (let i = 0; i < nPoints; i++) {
+      const o = i * 6, b = i * 15;
+      const x1 = vals[o] & 0xFFFFF, y1 = vals[o + 1] & 0xFFFFF, z1 = vals[o + 2] & 0xFFFFF;
+      const x2 = vals[o + 3] & 0xFFFFF, y2 = vals[o + 4] & 0xFFFFF, z2 = vals[o + 5] & 0xFFFFF;
+      mp[b] = x1 >> 12; mp[b + 1] = (x1 >> 4) & 0xFF; mp[b + 2] = ((x1 & 0xF) << 4) | (y1 >> 16);
+      mp[b + 3] = (y1 >> 8) & 0xFF; mp[b + 4] = y1 & 0xFF;
+      mp[b + 5] = z1 >> 12; mp[b + 6] = (z1 >> 4) & 0xFF; mp[b + 7] = ((z1 & 0xF) << 4) | (x2 >> 16);
+      mp[b + 8] = (x2 >> 8) & 0xFF; mp[b + 9] = x2 & 0xFF;
+      mp[b + 10] = y2 >> 12; mp[b + 11] = (y2 >> 4) & 0xFF; mp[b + 12] = ((y2 & 0xF) << 4) | (z2 >> 16);
+      mp[b + 13] = (z2 >> 8) & 0xFF; mp[b + 14] = z2 & 0xFF;
+    }
+    return mp;
+  }
+  // Picture-order point cloud in mm (sensor axes: X=down, Y=left, Z=forward), SDK make_pcd_from_raw logic:
+  // raw stream index j lands at picture index MPDATATBL[j]  (pic[k] = raw[INV_MPDATATBL[k]], Sony's _xyDataTbl).
+  // if 1st peak z is invalid (0 or >= 50000 mm) and 2nd is valid, use 2nd. Invalid -> (0,0,0).
+  function toPicture(raw6, nPoints, opts) {
+    const useSecond = !(opts && opts.useSecond === false);
+    const flipTable = !!(opts && opts.flipTable); // diagnostic: apply the table in the other direction
+    const pts = new Float32Array(576 * 3), pts2 = new Float32Array(576 * 3);
+    const flag = new Uint8Array(576); // 0 invalid, 1 first peak, 2 second peak
+    for (let k = 0; k < 576; k++) {
+      const j = flipTable ? MPDATATBL[k] : INV_MPDATATBL[k];
+      if (j >= nPoints) continue;
+      const o = j * 6;
+      let x = raw6[o] / 4, y = raw6[o + 1] / 4, z = raw6[o + 2] / 4;
+      const x2 = raw6[o + 3] / 4, y2 = raw6[o + 4] / 4, z2 = raw6[o + 5] / 4;
+      pts2[k * 3] = x2; pts2[k * 3 + 1] = y2; pts2[k * 3 + 2] = z2;
+      // Sony's filter (range_min=0, range_max=50000 mm): only an over-range 1st peak falls back to the 2nd peak;
+      // z=0 means "not measured" and stays (0,0,0).
+      const over1 = z >= 50000, over2 = z2 >= 50000;
+      if (over1) {
+        if (useSecond && !over2) { x = x2; y = y2; z = z2; flag[k] = z !== 0 ? 2 : 0; }
+        else { x = 0; y = 0; z = 0; }
+      } else flag[k] = z !== 0 ? 1 : 0;
+      pts[k * 3] = x; pts[k * 3 + 1] = y; pts[k * 3 + 2] = z;
+    }
+    return { pts, pts2, flag };
+  }
+
+  /* ---------- IMU record decode (manual p.31-32): 16 bytes big-endian ---------- */
+  function decodeImu(rec) {
+    const s16 = (i) => { let v = (rec[i] << 8) | rec[i + 1]; if (v & 0x8000) v -= 0x10000; return v; };
+    let t = rec[13]; if (t & 0x80) t -= 0x100;
+    return {
+      head: rec[0],
+      ax: s16(1) / 8192, ay: s16(3) / 8192, az: s16(5) / 8192,          // g  (±4G full scale, 0x2000 ≈ 1G)
+      gx: s16(7) / 65.536, gy: s16(9) / 65.536, gz: s16(11) / 65.536,  // deg/s (±500 dps)
+      temp: t / 2.07 + 25,                                              // °C
+      ts: (rec[14] << 8) | rec[15]                                      // µs counter (16 bit) or offset when head=0x6C
+    };
+  }
+  function encodeImu(v) {
+    const r = new Uint8Array(16);
+    const w16 = (i, x) => { x = Math.round(x); if (x < 0) x += 0x10000; r[i] = (x >> 8) & 0xFF; r[i + 1] = x & 0xFF; };
+    r[0] = v.head; w16(1, v.ax * 8192); w16(3, v.ay * 8192); w16(5, v.az * 8192);
+    w16(7, v.gx * 65.536); w16(9, v.gy * 65.536); w16(11, v.gz * 65.536);
+    let t = Math.round((v.temp - 25) * 2.07); if (t < 0) t += 256; r[13] = t & 0xFF; w16(14, v.ts);
+    return r;
+  }
+
+  /* ---------- response parsers ---------- */
+  function parseTmLine(s) {
+    const m = { tm: NaN, ts: NaN, temp: NaN };
+    let r = /tm=(-?\d+)/.exec(s); if (r) m.tm = +r[1];
+    r = /ts=(-?\d+)/.exec(s); if (r) m.ts = +r[1];
+    r = /temp=(-?\d+)/.exec(s); if (r) m.temp = +r[1];
+    return m;
+  }
+  function parseVer(lines) {
+    const info = { kind: '', version: '', settingVersion: '', serial: '', model: '', opeHours: NaN, shotsK: NaN, errors: [] };
+    for (const l of lines) {
+      let r = /dToF\s+(\S+)\s+Version\s+(.*)$/.exec(l);
+      if (r) { info.kind = r[1]; info.version = r[2].trim(); continue; }
+      r = /setting\s+Version\s+(.*)$/.exec(l);
+      if (r) { info.settingVersion = r[1].trim(); continue; }
+      r = /model:(\S+)\s+serial:(\S+)/.exec(l);
+      if (r) { info.model = r[1]; info.serial = r[2]; continue; }
+      r = /ope:([\d.]+)\(H\)\s+shot:([\d.]+)\(k\)/.exec(l);
+      if (r) { info.opeHours = +r[1]; info.shotsK = +r[2]; continue; }
+      if (/Boot Error|CurrentStatus Error|not set serial/.test(l)) info.errors.push(l.trim());
+    }
+    return info;
+  }
+  function parseSensorInfo(lines) {
+    const o = {};
+    for (const l of lines) {
+      let r = /^S\/N=\s*(\S+)/.exec(l); if (r) { o.moduleSN = r[1]; continue; }
+      r = /^(\w[\w ]*?)=(.*)$/.exec(l); if (r) { o[r[1].trim()] = r[2].trim(); continue; }
+      r = /model:(\S+)\s+serial:(\S+)/.exec(l); if (r) { o.model = r[1]; o.serial = r[2]; }
+    }
+    return o;
+  }
+  function parseFlmode(lines) {
+    // "current:cdc/30m15f"  or  "current:0/(30m30f/txall)"  or just a mode name
+    for (const l of lines) {
+      const r = /(20m|30mstd|30m15f|30m30f|40m)/i.exec(l.includes('current') ? l.slice(l.indexOf('current')) : l);
+      if (r) return r[1].toLowerCase();
+    }
+    return '';
+  }
+  function parseCstatus(lines) {
+    const o = { usb: '', uart: '' };
+    for (const l of lines) {
+      let r = /USB\s*(?:interface:?)?\s*([A-Za-z0-9]+)/.exec(l); if (r && !o.usb) o.usb = r[1];
+      r = /UART\s*(?:interface:?)?\s*([A-Za-z0-9]+)/.exec(l); if (r && !o.uart) o.uart = r[1];
+    }
+    return o;
+  }
+  function parseFormat(lines) {
+    const o = { format: '', imu: null };
+    for (const l of lines) {
+      const r = /(ascii|binary|binz)/.exec(l); if (r && !o.format) o.format = r[1];
+      if (/imuon/.test(l)) o.imu = true; else if (/imuoff/.test(l)) o.imu = false;
+    }
+    return o;
+  }
+
+  /* ---------- stream parser + command layer ---------- */
+  class AsDt1Protocol {
+    constructor(transport, log) {
+      this.t = transport; this.log = log || (() => {});
+      this.buf = new Uint8Array(0); this.state = 'text';
+      this.nPoints = 576; this.imuEnabled = false;
+      this.pending = null; this.chain = Promise.resolve();
+      this.frame = null; this.onFrame = null; this.onUnsolicited = null;
+      this.list = null; this.listWaiter = null;
+      this.stats = { bytes: 0, frames: 0, resync: 0, badEnd: 0 };
+      transport.onData = (b) => this.push(b);
+    }
+    push(b) {
+      this.stats.bytes += b.length;
+      if (this.buf.length === 0) this.buf = b.slice();
+      else { const n = new Uint8Array(this.buf.length + b.length); n.set(this.buf); n.set(b, this.buf.length); this.buf = n; }
+      this.process();
+    }
+    consume(n) { this.buf = this.buf.subarray(n); }
+    process() {
+      let guard = 0;
+      while (this.buf.length > 0 && guard++ < 20000) {
+        if (this.state === 'text') {
+          const nl = this.buf.indexOf(10);
+          if (nl < 0) {
+            // partial line: prompt "> " has no newline
+            if (this.buf.length <= 3 && this.isPromptBytes(this.buf)) { this.consume(this.buf.length); this.onPrompt(); continue; }
+            if (this.buf.length > 65536) { this.log('テキスト受信が長すぎるため古い分を捨てます', 'warn'); this.consume(this.buf.length - 4096); }
+            break;
+          }
+          const s = latin1(this.buf.subarray(0, nl)).replace(/\r$/, '');
+          this.consume(nl + 1);
+          this.handleLine(s);
+        } else if (this.state === 'mp') {
+          const need = this.nPoints * 15;
+          if (this.buf.length < need) break;
+          this.frame.mp = this.buf.slice(0, need); this.consume(need);
+          this.frame.after = 'mp'; this.state = 'text';
+          // the footer "END" follows immediately (no CR LF between binary and END)
+          if (this.buf.length >= 3 && !(this.buf[0] === 0x45 && this.buf[1] === 0x4E && this.buf[2] === 0x44)) {
+            this.stats.badEnd++; this.log('点群ブロックの終端(END)が見つかりません。点数設定(' + this.nPoints + ')を確認', 'warn');
+          }
+        } else if (this.state === 'imu') {
+          if (this.buf.length >= 3 && this.buf[0] === 0x45 && this.buf[1] === 0x4E && this.buf[2] === 0x44) {
+            this.consume(3); this.state = 'text'; this.frame.after = 'imu'; continue;
+          }
+          if (this.buf.length < 16) break;
+          const h = this.buf[0];
+          if (h !== 0x68 && h !== 0x6C) { this.stats.resync++; this.log('IMUデータの同期ずれ(先頭0x' + h.toString(16) + ')', 'warn'); this.state = 'text'; continue; }
+          this.frame.imu.push(this.buf.slice(0, 16)); this.consume(16);
+        } else if (this.state === 'list') {
+          const nl = this.buf.indexOf(10); if (nl < 0) break;
+          const s = latin1(this.buf.subarray(0, nl)).replace(/\r$/, '').trim(); this.consume(nl + 1);
+          if (s === 'END') { const l = this.list; this.list = null; this.state = 'text'; if (this.listWaiter) { const w = this.listWaiter; this.listWaiter = null; w(l); } }
+          else if (s !== '') this.list.lines.push(s);
+        }
+      }
+    }
+    isPromptBytes(b) { return (b.length === 1 && b[0] === 0x3E) || (b.length === 2 && b[0] === 0x3E && b[1] === 0x20) || (b.length === 3 && b[0] === 0x0D && b[1] === 0x3E && b[2] === 0x20); }
+    handleLine(s) {
+      if (s.startsWith('> ')) { this.onPrompt(); s = s.slice(2); }
+      else if (s === '>') { this.onPrompt(); return; }
+      if (s === '') return;
+      if (s.startsWith('tm=')) {
+        const m = parseTmLine(s);
+        if (this.frame && this.frame.after === 'imu') { this.frame.tmEnd = m.tm; this.frame.tsEnd = m.ts; this.emitFrame(); return; }
+        if (this.frame && this.frame.after === 'mp') this.emitFrame(); // previous frame had no IMU block
+        this.frame = { tm: m.tm, ts: m.ts, temp: m.temp, imu: [], hostStart: Date.now(), after: '' };
+        return;
+      }
+      if (s === 'BEGIN MP') { if (!this.frame) this.frame = { tm: NaN, ts: NaN, temp: NaN, imu: [], hostStart: Date.now(), after: '' }; this.state = 'mp'; return; }
+      if (s === 'END') { if (this.frame && this.frame.after === 'mp' && !this.imuEnabled) this.emitFrame(); return; }
+      if (s === 'BEGIN IMU') { if (!this.frame) this.frame = { tm: NaN, ts: NaN, temp: NaN, imu: [], hostStart: Date.now(), after: '' }; this.state = 'imu'; return; }
+      if (s === 'BEGIN MPCD') { this.state = 'list'; this.list = { kind: 'mp', lines: [] }; return; }
+      if (s === 'BEGIN SVM' || s === 'BEGIN SVN') { this.state = 'list'; this.list = { kind: 'svm', lines: [] }; return; }
+      if (this.pending) {
+        if (this.pending.lines.length === 0 && s.trim() === this.pending.cmd.trim()) return; // command echo
+        this.pending.lines.push(s);
+      } else if (this.onUnsolicited) this.onUnsolicited(s);
+    }
+    emitFrame() {
+      const f = this.frame; this.frame = null;
+      if (!f || !f.mp) return;
+      f.hostEnd = Date.now(); f.mono = (typeof performance !== 'undefined') ? performance.now() : f.hostEnd;
+      f.nPoints = this.nPoints; this.stats.frames++;
+      if (this.onFrame) this.onFrame(f);
+    }
+    onPrompt() {
+      const p = this.pending; if (!p) return;
+      this.pending = null; if (p.timer) clearTimeout(p.timer);
+      p.resolve(p.lines);
+    }
+    async write(str) { await this.t.write(te.encode(str)); }
+    // send a command and collect response lines until the prompt
+    cmd(c, timeoutMs) {
+      const run = () => new Promise((resolve) => {
+        const p = { cmd: c, lines: [], resolve, timer: null };
+        p.timer = setTimeout(() => { if (this.pending === p) { this.pending = null; this.log('応答待ちタイムアウト: ' + c, 'warn'); resolve(p.lines); } }, timeoutMs || 2500);
+        this.pending = p;
+        this.write(c + '\r').catch((e) => { this.log('送信失敗: ' + c + ' (' + e.message + ')', 'error'); if (this.pending === p) { this.pending = null; clearTimeout(p.timer); resolve(p.lines); } });
+      });
+      const r = this.chain.then(run, run); this.chain = r.then(() => {}, () => {}); return r;
+    }
+    send(c) { const run = () => this.write(c + '\r'); const r = this.chain.then(run, run); this.chain = r.then(() => {}, () => {}); return r; }
+    async getList(c) {
+      const listP = new Promise((res) => { this.listWaiter = res; });
+      const timeout = new Promise((res) => setTimeout(() => res(null), 6000));
+      const lines = await this.cmd(c, 6000);
+      const l = await Promise.race([listP, timeout]);
+      this.listWaiter = null;
+      return l ? l.lines : (lines.length > 570 ? lines : []);
+    }
+    async drain(ms) { // clear stale input (e.g. an old prompt) at connection
+      await this.write('\r');
+      await new Promise((r) => setTimeout(r, ms || 300));
+      this.buf = new Uint8Array(0); this.state = 'text'; this.frame = null; this.pending = null;
+    }
+  }
+
+  /* ---------- helpers for mpinfo / svminfo lists (picture order) ---------- */
+  function mpinfoToPicture(lines) {
+    if (lines.length < 576) return null;
+    const raw = lines.map((l) => l.split(',').map(Number)); // [Ymp, Xmp, size]
+    const rects = new Array(576);
+    for (let k = 0; k < 576; k++) {
+      const r = raw[MPDATATBL_MPXY[k]] || [0, 0, 0];
+      const s = MPSIZE[r[2] & 3];
+      rects[k] = { x: r[1], y: r[0], w: s[0], h: s[1] };
+    }
+    return rects;
+  }
+  function svmToPicture(lines) {
+    if (lines.length < 576) return null;
+    const raw = lines.map((l) => l.split(',').map((v) => { let n = parseInt(v, 10); if (n >= 0x8000) n -= 0x10000; return n / 32768; }));
+    const xz = new Float32Array(576), yz = new Float32Array(576);
+    for (let k = 0; k < 576; k++) {
+      const v = raw[MPDATATBL_MPXY[k]] || [0, 0];
+      const d = v[0] * v[0] + v[1] * v[1];
+      const r1 = 1 / Math.cos(Math.asin(Math.sqrt(Math.min(1, d)))); // R/Z (manual p.15)
+      xz[k] = v[0] * r1; yz[k] = v[1] * r1;                           // X/Z, Y/Z
+    }
+    return { xz, yz };
+  }
+  // fallback: regular grid from the nominal FOV 35.5° x 28.2° (used when svminfo is unavailable)
+  function nominalSvm() {
+    const xz = new Float32Array(576), yz = new Float32Array(576);
+    const tx = Math.tan(28.2 / 2 * Math.PI / 180), ty = Math.tan(35.5 / 2 * Math.PI / 180);
+    for (let r = 0; r < 24; r++) for (let c = 0; c < 24; c++) {
+      const k = r * 24 + c;
+      xz[k] = ((r + 0.5) / 24 - 0.5) * 2 * tx;        // X down
+      yz[k] = -(((c + 0.5) / 24 - 0.5) * 2 * ty);     // Y left (column increases to the right)
+    }
+    return { xz, yz };
+  }
+  function nominalRects() {
+    const rects = new Array(576);
+    for (let r = 0; r < 24; r++) for (let c = 0; c < 24; c++) rects[r * 24 + c] = { x: Math.round(c * SPAD_W / 24) + 1, y: Math.round(r * SPAD_H / 24) + 1, w: 3, h: 3 };
+    return rects;
+  }
+
+  /* ---------- binary log file format (.asdt1) ---------- */
+  const LOG_MAGIC = 'ASDT1LOG';
+  const REC_MAGIC = 0x31544441; // 'ADT1' little-endian
+  const REC_FRAME = 1, REC_GPS = 2, REC_MARK = 3, REC_INFO = 4;
+  function buildLogHeader(meta) {
+    const json = te.encode(JSON.stringify(meta));
+    const h = new Uint8Array(8 + 2 + 2 + 4 + json.length);
+    h.set(te.encode(LOG_MAGIC), 0);
+    const dv = new DataView(h.buffer);
+    dv.setUint16(8, 1, true); dv.setUint16(10, 0, true); dv.setUint32(12, json.length, true);
+    h.set(json, 16);
+    return h;
+  }
+  function recordHeader(type, payloadLen) {
+    const h = new Uint8Array(12); const dv = new DataView(h.buffer);
+    dv.setUint32(0, REC_MAGIC, true); h[4] = type; h[5] = 1; dv.setUint16(6, 0, true); dv.setUint32(8, payloadLen, true);
+    return h;
+  }
+  const FRAME_FIXED = 84;
+  function buildFrameRecord(f, frameNo, modeCode, gps) {
+    const nImu = f.imu.length, mpLen = f.mp.length;
+    const payload = new Uint8Array(FRAME_FIXED + mpLen + nImu * 16);
+    const dv = new DataView(payload.buffer);
+    let o = 0;
+    dv.setUint32(o, frameNo, true); o += 4;
+    dv.setFloat64(o, f.hostEnd, true); o += 8;
+    dv.setFloat64(o, f.mono, true); o += 8;
+    dv.setUint32(o, isNaN(f.tm) ? 0xFFFFFFFF : (f.tm >>> 0), true); o += 4;
+    dv.setUint32(o, isNaN(f.ts) ? 0xFFFFFFFF : (f.ts >>> 0), true); o += 4;
+    dv.setInt16(o, isNaN(f.temp) ? -32768 : f.temp, true); o += 2;
+    payload[o++] = modeCode & 0xFF;
+    payload[o++] = (nImu ? 1 : 0) | (gps ? 2 : 0);
+    dv.setUint16(o, f.nPoints, true); o += 2;
+    dv.setUint16(o, nImu, true); o += 2;
+    dv.setUint32(o, (f.tmEnd == null || isNaN(f.tmEnd)) ? 0xFFFFFFFF : (f.tmEnd >>> 0), true); o += 4;
+    dv.setUint32(o, (f.tsEnd == null || isNaN(f.tsEnd)) ? 0xFFFFFFFF : (f.tsEnd >>> 0), true); o += 4;
+    dv.setFloat64(o, gps ? gps.t : NaN, true); o += 8;
+    dv.setFloat64(o, gps ? gps.lat : NaN, true); o += 8;
+    dv.setFloat64(o, gps ? gps.lon : NaN, true); o += 8;
+    dv.setFloat32(o, gps ? gps.alt : NaN, true); o += 4;
+    dv.setFloat32(o, gps ? gps.acc : NaN, true); o += 4;
+    dv.setFloat32(o, gps ? gps.speed : NaN, true); o += 4;
+    dv.setFloat32(o, gps ? gps.heading : NaN, true); o += 4;
+    payload.set(f.mp, o); o += mpLen;
+    for (const r of f.imu) { payload.set(r, o); o += 16; }
+    const out = new Uint8Array(12 + payload.length); out.set(recordHeader(REC_FRAME, payload.length), 0); out.set(payload, 12);
+    return out;
+  }
+  function buildGpsRecord(g) {
+    const payload = new Uint8Array(44); const dv = new DataView(payload.buffer);
+    dv.setFloat64(0, g.t, true); dv.setFloat64(8, g.lat, true); dv.setFloat64(16, g.lon, true);
+    dv.setFloat32(24, g.alt, true); dv.setFloat32(28, g.acc, true); dv.setFloat32(32, g.speed, true); dv.setFloat32(36, g.heading, true); dv.setFloat32(40, g.altAcc, true);
+    const out = new Uint8Array(12 + 44); out.set(recordHeader(REC_GPS, 44), 0); out.set(payload, 12); return out;
+  }
+  function buildTextRecord(type, t, text) {
+    const b = te.encode(text); const payload = new Uint8Array(8 + b.length);
+    new DataView(payload.buffer).setFloat64(0, t, true); payload.set(b, 8);
+    const out = new Uint8Array(12 + payload.length); out.set(recordHeader(type, payload.length), 0); out.set(payload, 12); return out;
+  }
+  // parse a whole .asdt1 buffer (used for in-app CSV/GPX export)
+  function parseLog(buf) {
+    const u8 = new Uint8Array(buf); const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
+    if (latin1(u8.subarray(0, 8)) !== LOG_MAGIC) throw new Error('not an .asdt1 file');
+    const jl = dv.getUint32(12, true);
+    const meta = JSON.parse(new TextDecoder().decode(u8.subarray(16, 16 + jl)));
+    let o = 16 + jl; const frames = [], gps = [], marks = [], infos = [];
+    while (o + 12 <= u8.length) {
+      if (dv.getUint32(o, true) !== REC_MAGIC) { o++; continue; }
+      const type = u8[o + 4], len = dv.getUint32(o + 8, true); const p = o + 12; if (p + len > u8.length) break;
+      if (type === REC_FRAME) {
+        const f = { frameNo: dv.getUint32(p, true), hostEnd: dv.getFloat64(p + 4, true), mono: dv.getFloat64(p + 12, true), tm: dv.getUint32(p + 20, true), ts: dv.getUint32(p + 24, true), temp: dv.getInt16(p + 28, true), modeCode: u8[p + 30], flags: u8[p + 31], nPoints: dv.getUint16(p + 32, true), nImu: dv.getUint16(p + 34, true), tmEnd: dv.getUint32(p + 36, true), tsEnd: dv.getUint32(p + 40, true), gpsT: dv.getFloat64(p + 44, true), lat: dv.getFloat64(p + 52, true), lon: dv.getFloat64(p + 60, true), alt: dv.getFloat32(p + 68, true), acc: dv.getFloat32(p + 72, true), speed: dv.getFloat32(p + 76, true), heading: dv.getFloat32(p + 80, true) };
+        f.mp = u8.subarray(p + FRAME_FIXED, p + FRAME_FIXED + f.nPoints * 15);
+        f.imu = []; for (let i = 0; i < f.nImu; i++) { const s = p + FRAME_FIXED + f.nPoints * 15 + i * 16; f.imu.push(u8.subarray(s, s + 16)); }
+        frames.push(f);
+      } else if (type === REC_GPS) {
+        gps.push({ t: dv.getFloat64(p, true), lat: dv.getFloat64(p + 8, true), lon: dv.getFloat64(p + 16, true), alt: dv.getFloat32(p + 24, true), acc: dv.getFloat32(p + 28, true), speed: dv.getFloat32(p + 32, true), heading: dv.getFloat32(p + 36, true), altAcc: dv.getFloat32(p + 40, true) });
+      } else if (type === REC_MARK || type === REC_INFO) {
+        const t = dv.getFloat64(p, true); const text = new TextDecoder().decode(u8.subarray(p + 8, p + len));
+        (type === REC_MARK ? marks : infos).push({ t, text });
+      }
+      o = p + len;
+    }
+    return { meta, frames, gps, marks, infos };
+  }
+
+  /* ---------- simulator: behaves like the AS-DT1 firmware over a serial line ---------- */
+  class SimTransport {
+    constructor(opts) {
+      opts = opts || {};
+      this.onData = null; this.onClose = null; this.name = 'シミュレーション';
+      this.mode = opts.mode || '30m15f'; this.format = 'ascii'; this.imu = false; this.fsync = 0;
+      this.timer = null; this.t0 = Date.now(); this.tsCnt = 0; this.imuTs = 1234; this.frameCount = 0;
+      this.scene = Object.assign({ height: 2.0, pitchDeg: 35, slopeDeg: 20, grass: 0.6, noise: 0.004, invalid: 0.02, fps: null }, opts.scene || {});
+      this.svm = nominalSvm(); this.rects = nominalRects();
+      this.rebootDelay = opts.rebootDelay || 0;
+      this.serial = opts.serial || '1000123';
+    }
+    emit(str) { if (this.onData) this.onData(typeof str === 'string' ? te.encode(str) : str); }
+    async write(bytes) {
+      const s = latin1(bytes); this.rx = (this.rx || '') + s;
+      let i;
+      while ((i = this.rx.indexOf('\r')) >= 0) { const line = this.rx.slice(0, i); this.rx = this.rx.slice(i + 1); await this.handle(line.trim()); }
+    }
+    reply(cmd, lines) { this.emit(cmd + '\r\n' + (lines.length ? lines.join('\r\n') + '\r\n' : '') + '> '); }
+    async handle(line) {
+      if (line === '') { this.emit('\r\n> '); return; }
+      const [c, ...args] = line.split(/\s+/);
+      const m = MODES[this.mode];
+      switch (c) {
+        case 'ver': this.reply(line, ['dToF CDC Version 1.01 B114', 'setting Version 1.01 B003 REG 1.0.2', 'model:AS-DT1 serial:' + this.serial, 'ope:12.5(H) shot:321(k)']); break;
+        case 'sensorinfo': this.reply(line, ['EEPVER=1.0', 'model:AS-DT1 serial:' + this.serial, 'S/N=FFFFF410005270099', 'FMTVER=2.00', 'modelname=ABGX0233', 'manufacturing date=20250805 0130', 'laser lot=T2518']); break;
+        case 'flmode':
+          if (args[0] && MODES[args[0]]) { this.pendingMode = args[0]; this.reply(line, []); }
+          else this.reply(line, ['current:cdc/' + this.mode]);
+          break;
+        case 'cstatus': this.reply(line, ['cstatus', 'USB HS', 'UART Disable']); break;
+        case 'ustatus': this.reply(line, ['HS', 'BusPwr', 'Hub UCur Default', 'Hub DCur Default']); break;
+        case 'diag': this.reply(line, ['Diag OK']); break;
+        case 'errinfo': this.reply(line, ['--- Error info ---', 'No Error Info', '--- Fsync Extension info ---', 'Number of occurrences : 0', 'Max extension time : 0[ms]', '--- Sensor overheat info ---', 'T>70degC:0(Sec)', 'maxT:41(degC)']); break;
+        case 'flshow': this.reply(line, ['flstart cdc', 'flmode ' + this.mode, 'flfsync 0', 'flformat ascii', 'fluart 115200', 'flled on']); break;
+        case 'format':
+          if (args[0]) { this.format = args[0]; this.imu = args[1] === 'imu'; this.reply(line, []); }
+          else this.reply(line, [this.format + ' ' + (this.imu ? 'imuon' : 'imuoff')]);
+          break;
+        case 'fsync':
+          if (args.length) { this.fsync = parseFloat(args[0]); this.reply(line, []); this.applyFsync(); }
+          else this.reply(line, [String(this.fsync)]);
+          break;
+        case 't': this.reply(line, []); setTimeout(() => this.sendFrame(), 5); break;
+        case 'mpinfo': { const lines = []; for (let i = 0; i < 576; i++) { const r = this.rects[INV_MPXY[i]]; lines.push(r.y + ',' + r.x + ',' + (r.w === 3 && r.h === 3 ? 3 : 0)); } this.emit(line + '\r\nBEGIN MPCD\r\n' + lines.join('\r\n') + '\r\nEND\r\n> '); break; }
+        case 'svminfo': { const lines = []; for (let i = 0; i < 576; i++) { const k = INV_MPXY[i]; const xz = this.svm.xz[k], yz = this.svm.yz[k]; const r = Math.sqrt(1 + xz * xz + yz * yz); let a = Math.round(xz / r * 32768), b = Math.round(yz / r * 32768); if (a < 0) a += 65536; if (b < 0) b += 65536; lines.push(a + ',' + b); } this.emit(line + '\r\nBEGIN SVM\r\n' + lines.join('\r\n') + '\r\nEND\r\n> '); break; }
+        case 'reboot': this.emit(line + '\r\n'); if (this.pendingMode) { this.mode = this.pendingMode; this.pendingMode = null; } this.applyFsync(true); if (this.onClose) setTimeout(() => this.onClose(new Error('reboot')), 50); break;
+        case 'ts': this.reply(line, ['cnt::' + this.tsCnt + ' preset::0']); break;
+        default: this.reply(line, ['illegal']);
+      }
+    }
+    applyFsync(stop) {
+      if (this.timer) { clearInterval(this.timer); this.timer = null; }
+      if (stop || !this.fsync) return;
+      const m = MODES[this.mode];
+      let iv = this.fsync < 0 ? m.minMs : Math.max(m.minMs, this.fsync);
+      if (this.scene.fps) iv = 1000 / this.scene.fps;
+      this.timer = setInterval(() => this.sendFrame(), iv);
+    }
+    sendFrame() {
+      const m = MODES[this.mode]; const n = m.n;
+      const vals = new Int32Array(n * 6);
+      const sc = this.scene; const t = (Date.now() - this.t0) / 1000;
+      const pitch = sc.pitchDeg * Math.PI / 180, slope = sc.slopeDeg * Math.PI / 180;
+      // sensor at height h looking down by pitch; ground is a plane sloping away (levee face)
+      for (let k = 0; k < 576; k++) {
+        const j = INV_MPDATATBL[k]; if (j >= n) continue;
+        const xz = this.svm.xz[k], yz = this.svm.yz[k];
+        // ray in sensor frame: (X=xz*Z, Y=yz*Z, Z). World: forward f, up u. sensor Z -> (cos p, -sin p), sensor X(down) -> (sin p, cos p)*(-1)?? keep simple:
+        // direction in world (forward, up): d_f = cos(pitch) - xz*sin(pitch) ; d_u = -sin(pitch) - xz*cos(pitch)
+        const df = Math.cos(pitch) - xz * Math.sin(pitch), du = -Math.sin(pitch) - xz * Math.cos(pitch);
+        // ground: u = -h - f*tan(slope) + wave ; solve s: du*s = -h - df*s*tan(slope)
+        const denom = du + df * Math.tan(slope);
+        let s = denom < -1e-6 ? -sc.height / denom : 60; // metres along ray (unit: Z=1 direction scale)
+        let s2 = 0;
+        const rnd = Math.random();
+        if (rnd < sc.invalid || s > 45) { s = 0; }
+        else {
+          const grassTop = sc.grass * (0.6 + 0.4 * Math.sin(k * 0.37 + t * 0.5) * Math.sin(k * 0.11));
+          if (Math.random() < 0.7) { s2 = s; s = s * (1 - grassTop / (sc.height + 1e-6) * 0.5); } // first return from grass canopy, second from ground
+          s += (Math.random() - 0.5) * sc.noise * s * 4;
+        }
+        const Z = s * 1000, X = xz * Z, Y = yz * Z, Z2 = s2 * 1000;
+        const o = j * 6;
+        vals[o] = Math.round(X * 4); vals[o + 1] = Math.round(Y * 4); vals[o + 2] = Math.round(Z * 4);
+        vals[o + 3] = Math.round(xz * Z2 * 4); vals[o + 4] = Math.round(yz * Z2 * 4); vals[o + 5] = Math.round(Z2 * 4);
+      }
+      const mp = packXYZ(vals, n);
+      const tm = Date.now() - this.t0; const temp = 30 + Math.round(5 * Math.sin(t / 60));
+      const parts = [te.encode('tm=' + tm + ' ts=' + this.tsCnt + ' temp=' + temp + '\r\nBEGIN MP\r\n'), mp, te.encode('END\r\n')];
+      if (this.imu) {
+        const nImu = Math.max(1, Math.round(MODES[this.mode].minMs / 10));
+        // gravity seen by the IMU: along sensor X (down) when level, shifting to Z as the sensor pitches down
+        const gX = Math.cos(pitch), gZ = Math.sin(pitch);
+        const recs = [];
+        recs.push(encodeImu({ head: 0x6C, ax: gX, ay: 0, az: gZ, gx: 0, gy: 0, gz: 0, temp: temp + 3, ts: 5681 }));
+        for (let i = 0; i < nImu; i++) { this.imuTs = (this.imuTs + 10000) & 0xFFFF; recs.push(encodeImu({ head: 0x68, ax: gX + (Math.random() - 0.5) * 0.02, ay: (Math.random() - 0.5) * 0.02, az: gZ + (Math.random() - 0.5) * 0.02, gx: (Math.random() - 0.5), gy: (Math.random() - 0.5), gz: (Math.random() - 0.5), temp: temp + 3, ts: this.imuTs })); }
+        parts.push(te.encode('BEGIN IMU\r\n'));
+        for (const r of recs) parts.push(r);
+        parts.push(te.encode('END\r\ntm=' + (tm + 30) + ' ts=' + this.tsCnt + '\r\n'));
+      }
+      this.tsCnt += 66; this.frameCount++;
+      let len = 0; for (const p of parts) len += p.length;
+      const out = new Uint8Array(len); let o = 0; for (const p of parts) { out.set(p, o); o += p.length; }
+      // deliver in chunks to exercise the parser like a real USB link
+      const chunk = 4096;
+      for (let i = 0; i < out.length; i += chunk) this.emit(out.subarray(i, Math.min(out.length, i + chunk)));
+    }
+    async close() { this.applyFsync(true); }
+  }
+
+  root.ASDT1 = { APP_VERSION, USB_VID, USB_PID, MODES, MODE_BY_CODE, MPDATATBL, MPDATATBL_MPXY, INV_MPDATATBL, INV_MPXY, MPSIZE, SPAD_W, SPAD_H,
+    latin1, unpackXYZ, packXYZ, toPicture, decodeImu, encodeImu, parseTmLine, parseVer, parseSensorInfo, parseFlmode, parseCstatus, parseFormat,
+    AsDt1Protocol, mpinfoToPicture, svmToPicture, nominalSvm, nominalRects,
+    LOG_MAGIC, REC_FRAME, REC_GPS, REC_MARK, REC_INFO, FRAME_FIXED, buildLogHeader, buildFrameRecord, buildGpsRecord, buildTextRecord, parseLog, SimTransport };
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+
+</script>
+<script>
+/* ===== AS-DT1 Mobile — app (DOM, USB transport, recorder, views) ===== */
+(function () {
+  'use strict';
+  const A = window.ASDT1;
+  const $ = (s) => document.querySelector(s);
+  const $$ = (s) => Array.from(document.querySelectorAll(s));
+
+  /* ---------- log ---------- */
+  const LOG = [];
+  function log(msg, level) {
+    const t = new Date();
+    const line = { t: t.toLocaleTimeString('ja-JP', { hour12: false }) + '.' + String(t.getMilliseconds()).padStart(3, '0'), msg: String(msg), level: level || 'info' };
+    LOG.push(line); if (LOG.length > 3000) LOG.splice(0, 500);
+    if (level === 'error' || level === 'warn') console.warn('[AS-DT1]', msg); else console.log('[AS-DT1]', msg);
+    if (ui.tab === 'log') renderLog();
+  }
+  function renderLog() {
+    const el = $('#logView'); if (!el) return;
+    const n = LOG.length; const start = Math.max(0, n - 400);
+    el.innerHTML = '';
+    for (let i = start; i < n; i++) { const l = LOG[i]; const d = document.createElement('div'); d.className = l.level; d.textContent = l.t + ' ' + l.msg; el.appendChild(d); }
+    el.scrollTop = el.scrollHeight;
+  }
+
+  /* ---------- settings ---------- */
+  const DEFAULTS = { fsync: -1, imu: true, gps: true, wake: true, second: true, colorAuto: true, colorMin: 0.5, colorMax: 30, prefix: 'REC', sim: false, color3d: 'h', profile: 'side', flipTable: false };
+  let settings = Object.assign({}, DEFAULTS);
+  try { const s = JSON.parse(localStorage.getItem('asdt1.settings') || '{}'); settings = Object.assign(settings, s); } catch (e) { /* storage may be unavailable */ }
+  function saveSettings() { try { localStorage.setItem('asdt1.settings', JSON.stringify(settings)); } catch (e) { /* ignore */ } }
+
+  /* ---------- state ---------- */
+  const st = {
+    transport: null, proto: null, usbDevice: null, connected: false, measuring: false, recording: false, rebooting: null,
+    mode: '', info: { ver: {}, sensor: {}, cstatus: {}, format: {}, ustatus: [] }, rects: null, svm: null,
+    frame: null, pic: null, frameNo: 0, fps: 0, lastFrameT: 0, stats: null, gps: null, gpsWatch: null, wakeLock: null,
+    imuLast: null, tilt: NaN, colorMin: 0.5, colorMax: 30, selected: -1, drawPending: false, recMeta: null
+  };
+  const ui = { tab: 'live', orbit: { az: -0.6, el: 0.45, dist: 0 }, profile: settings.profile || 'side', color3d: settings.color3d || 'h' };
+
+  /* ---------- USB transport (WebUSB, CDC-ACM) ---------- */
+  class UsbTransport {
+    constructor(device) { this.dev = device; this.onData = null; this.onClose = null; this.running = false; this.name = 'USB'; this.ctrlNum = null; }
+    async open() {
+      const d = this.dev;
+      await d.open();
+      if (d.configuration === null) await d.selectConfiguration(1);
+      let ctrl = null, data = null;
+      for (const i of d.configuration.interfaces) {
+        const a = i.alternate || i.alternates[0];
+        if (a.interfaceClass === 2 && a.interfaceSubclass === 2 && !ctrl) ctrl = i;
+        if (a.interfaceClass === 10 && !data) data = i;
+      }
+      log('USB構成: ' + d.configuration.interfaces.map((i) => { const a = i.alternate || i.alternates[0]; return '#' + i.interfaceNumber + '(class ' + a.interfaceClass + '/' + a.interfaceSubclass + ')'; }).join(' '));
+      if (!data) throw new Error('シリアル通信用(CDCデータ)のインターフェースが見つかりません');
+      if (ctrl) { try { await d.claimInterface(ctrl.interfaceNumber); this.ctrlNum = ctrl.interfaceNumber; } catch (e) { log('制御インターフェース確保に失敗（続行）: ' + e.message, 'warn'); } }
+      await d.claimInterface(data.interfaceNumber);
+      const alt = data.alternate || data.alternates[0];
+      for (const ep of alt.endpoints) { if (ep.type === 'bulk') { if (ep.direction === 'in') { this.epIn = ep.endpointNumber; this.inSize = ep.packetSize; } else { this.epOut = ep.endpointNumber; } } }
+      if (this.epIn == null || this.epOut == null) throw new Error('通信用エンドポイントが見つかりません');
+      if (this.ctrlNum !== null) {
+        try {
+          await d.controlTransferOut({ requestType: 'class', recipient: 'interface', request: 0x20, value: 0, index: this.ctrlNum }, new Uint8Array([0x00, 0xC2, 0x01, 0x00, 0x00, 0x00, 0x08])); // 115200 8N1
+          await d.controlTransferOut({ requestType: 'class', recipient: 'interface', request: 0x22, value: 0x03, index: this.ctrlNum }); // DTR+RTS
+        } catch (e) { log('回線設定(DTR/RTS)に失敗（続行）: ' + e.message, 'warn'); }
+      }
+      log('USB接続: ' + (d.productName || 'AS-DT1') + ' S/N ' + (d.serialNumber || '?') + ' EP in=' + this.epIn + ' out=' + this.epOut + ' pkt=' + this.inSize);
+      this.running = true; this.readLoop();
+    }
+    async readLoop() {
+      const d = this.dev; const len = 16384;
+      while (this.running) {
+        let r;
+        try { r = await d.transferIn(this.epIn, len); }
+        catch (e) { if (this.running) { log('USB受信が止まりました: ' + e.message, 'error'); this.running = false; if (this.onClose) this.onClose(e); } return; }
+        if (r.status === 'stall') { try { await d.clearHalt('in', this.epIn); } catch (e) { /* ignore */ } continue; }
+        if (r.data && r.data.byteLength && this.onData) this.onData(new Uint8Array(r.data.buffer, r.data.byteOffset, r.data.byteLength));
+      }
+    }
+    async write(bytes) { const r = await this.dev.transferOut(this.epOut, bytes); if (r.status !== 'ok') throw new Error('送信ステータス ' + r.status); }
+    async close() {
+      this.running = false;
+      try { if (this.ctrlNum !== null) await this.dev.controlTransferOut({ requestType: 'class', recipient: 'interface', request: 0x22, value: 0, index: this.ctrlNum }); } catch (e) { /* ignore */ }
+      try { await this.dev.close(); } catch (e) { /* ignore */ }
+    }
+  }
+
+  /* ---------- recorder (OPFS, chunked) ---------- */
+  class Recorder {
+    constructor() { this.root = null; this.ready = this.init(); this.rec = null; this.chain = Promise.resolve(); this.mem = null; }
+    async init() {
+      try {
+        const r = await navigator.storage.getDirectory(); const root = await r.getDirectoryHandle('asdt1', { create: true });
+        const probe = await root.getFileHandle('.probe', { create: true });
+        if (typeof probe.createWritable !== 'function') throw new Error('createWritable 非対応');
+        const w = await probe.createWritable(); await w.write(new Uint8Array([1])); await w.close(); await root.removeEntry('.probe');
+        this.root = root; this.backend = 'opfs';
+      } catch (e) {
+        this.root = null;
+        try { this.idb = await openIdb(); this.backend = 'idb'; log('ブラウザ内ファイル保存(OPFS)が使えないため IndexedDB に記録します: ' + e.message, 'warn'); }
+        catch (e2) { this.backend = 'memory'; log('端末内保存が使えないため、記録はメモリ上に置きます（ページを閉じると消えます）: ' + e.message + ' / ' + e2.message, 'warn'); }
+      }
+      try { if (navigator.storage && navigator.storage.persist) { const ok = await navigator.storage.persist(); if (!ok) log('保存領域の永続化は許可されませんでした（容量が逼迫すると記録が消える可能性）', 'warn'); } } catch (e) { /* ignore */ }
+    }
+    async start(name, headerBytes) {
+      await this.ready;
+      const rec = { name, dir: null, chunkIdx: 0, parts: [], partBytes: 0, partStart: Date.now(), bytes: 0, frames: 0, start: Date.now(), meta: null, memChunks: [] };
+      rec.meta = { name, start: rec.start, startIso: new Date(rec.start).toISOString(), frames: 0, bytes: 0, closed: false, headerBytes: headerBytes.length };
+      if (this.root) {
+        rec.dir = await this.root.getDirectoryHandle(name, { create: true });
+        await this.writeFile(rec.dir, 'header.bin', headerBytes);
+        await this.writeFile(rec.dir, 'meta.json', new TextEncoder().encode(JSON.stringify(rec.meta)));
+      } else if (this.idb) {
+        await idbPut(this.idb, 'chunks', { key: name + '/00000', rec: name, idx: 0, blob: new Blob([headerBytes]) });
+        await idbPut(this.idb, 'meta', Object.assign({ key: name }, rec.meta));
+      } else { rec.memChunks.push(headerBytes); }
+      rec.bytes = headerBytes.length;
+      this.rec = rec; return rec;
+    }
+    async writeFile(dir, fname, data) {
+      const fh = await dir.getFileHandle(fname, { create: true });
+      const w = await fh.createWritable(); await w.write(data); await w.close();
+    }
+    write(bytes, isFrame) {
+      const rec = this.rec; if (!rec) return;
+      rec.parts.push(bytes); rec.partBytes += bytes.length; rec.bytes += bytes.length; if (isFrame) rec.frames++;
+      if (rec.partBytes >= 1_000_000 || Date.now() - rec.partStart > 5000) this.flush();
+    }
+    flush() {
+      const rec = this.rec; if (!rec || rec.parts.length === 0) return this.chain;
+      const parts = rec.parts; rec.parts = []; rec.partBytes = 0; rec.partStart = Date.now();
+      const idx = ++rec.chunkIdx;
+      const metaSnapshot = Object.assign({}, rec.meta, { frames: rec.frames, bytes: rec.bytes, chunks: idx, lastWrite: Date.now() });
+      rec.meta = metaSnapshot;
+      this.chain = this.chain.then(async () => {
+        if (rec.dir) {
+          await this.writeFile(rec.dir, 'chunk_' + String(idx).padStart(5, '0') + '.bin', new Blob(parts));
+          await this.writeFile(rec.dir, 'meta.json', new TextEncoder().encode(JSON.stringify(metaSnapshot)));
+        } else if (this.idb) {
+          await idbPut(this.idb, 'chunks', { key: rec.name + '/' + String(idx).padStart(5, '0'), rec: rec.name, idx, blob: new Blob(parts) });
+          await idbPut(this.idb, 'meta', Object.assign({ key: rec.name }, metaSnapshot));
+        } else { for (const p of parts) rec.memChunks.push(p); if (!this.mem) this.mem = {}; this.mem[rec.name] = rec; }
+      }).catch((e) => log('記録の書き込みに失敗: ' + e.message, 'error'));
+      return this.chain;
+    }
+    async stop() {
+      const rec = this.rec; if (!rec) return null;
+      await this.flush(); await this.chain;
+      rec.meta = Object.assign({}, rec.meta, { closed: true, end: Date.now(), frames: rec.frames, bytes: rec.bytes });
+      if (rec.dir) await this.writeFile(rec.dir, 'meta.json', new TextEncoder().encode(JSON.stringify(rec.meta)));
+      else if (this.idb) await idbPut(this.idb, 'meta', Object.assign({ key: rec.name }, rec.meta));
+      else { if (!this.mem) this.mem = {}; this.mem[rec.name] = rec; }
+      this.rec = null; return rec.meta;
+    }
+    async list() {
+      await this.ready; const out = [];
+      if (this.root) {
+        for await (const [name, h] of this.root.entries()) {
+          if (h.kind !== 'directory') continue;
+          let meta = { name, frames: '?', bytes: 0, start: 0 };
+          try { const f = await (await h.getFileHandle('meta.json')).getFile(); meta = JSON.parse(await f.text()); } catch (e) { /* incomplete */ }
+          if (!meta.name) meta.name = name;
+          out.push(meta);
+        }
+      }
+      if (this.idb) { for (const m of await idbAll(this.idb, 'meta')) out.push(m); }
+      if (this.mem) for (const k in this.mem) out.push(Object.assign({ memory: true }, this.mem[k].meta));
+      out.sort((a, b) => (b.start || 0) - (a.start || 0));
+      return out;
+    }
+    async blobOf(name) {
+      await this.ready;
+      if (this.mem && this.mem[name]) return new Blob(this.mem[name].memChunks, { type: 'application/octet-stream' });
+      if (this.idb) { const ch = (await idbAll(this.idb, 'chunks')).filter((c) => c.rec === name).sort((a, b) => a.idx - b.idx); return new Blob(ch.map((c) => c.blob), { type: 'application/octet-stream' }); }
+      const dir = await this.root.getDirectoryHandle(name);
+      const parts = [await (await dir.getFileHandle('header.bin')).getFile()];
+      const names = [];
+      for await (const [n, h] of dir.entries()) if (h.kind === 'file' && n.startsWith('chunk_')) names.push(n);
+      names.sort();
+      for (const n of names) parts.push(await (await dir.getFileHandle(n)).getFile());
+      return new Blob(parts, { type: 'application/octet-stream' });
+    }
+    async remove(name) {
+      await this.ready;
+      if (this.mem && this.mem[name]) { delete this.mem[name]; return; }
+      if (this.idb) { for (const c of (await idbAll(this.idb, 'chunks')).filter((c) => c.rec === name)) await idbDel(this.idb, 'chunks', c.key); await idbDel(this.idb, 'meta', name); return; }
+      await this.root.removeEntry(name, { recursive: true });
+    }
+    async usage() { try { const e = await navigator.storage.estimate(); return e; } catch (err) { return null; } }
+  }
+
+  /* ---------- IndexedDB helpers (fallback storage) ---------- */
+  function openIdb() {
+    return new Promise((res, rej) => {
+      const r = indexedDB.open('asdt1', 1);
+      r.onupgradeneeded = () => { const db = r.result; if (!db.objectStoreNames.contains('chunks')) db.createObjectStore('chunks', { keyPath: 'key' }); if (!db.objectStoreNames.contains('meta')) db.createObjectStore('meta', { keyPath: 'key' }); };
+      r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error || new Error('IndexedDB open failed'));
+    });
+  }
+  const idbReq = (req) => new Promise((res, rej) => { req.onsuccess = () => res(req.result); req.onerror = () => rej(req.error); });
+  function idbPut(db, store, obj) { return idbReq(db.transaction(store, 'readwrite').objectStore(store).put(obj)); }
+  function idbAll(db, store) { return idbReq(db.transaction(store, 'readonly').objectStore(store).getAll()); }
+  function idbDel(db, store, key) { return idbReq(db.transaction(store, 'readwrite').objectStore(store).delete(key)); }
+  const recorder = new Recorder();
+
+  /* ---------- colour map (turbo) ---------- */
+  const TURBO = (() => {
+    const lut = new Uint8ClampedArray(256 * 3);
+    for (let i = 0; i < 256; i++) {
+      const x = i / 255, x2 = x * x, x3 = x2 * x, x4 = x3 * x, x5 = x4 * x;
+      const r = 0.13572138 + 4.61539260 * x - 42.66032258 * x2 + 132.13108234 * x3 - 152.94239396 * x4 + 59.28637943 * x5;
+      const g = 0.09140261 + 2.19418839 * x + 4.84296658 * x2 - 14.18503333 * x3 + 4.27729857 * x4 + 2.82956604 * x5;
+      const b = 0.10667330 + 12.64194608 * x - 60.58204836 * x2 + 110.36276771 * x3 - 89.90310912 * x4 + 27.34824973 * x5;
+      lut[i * 3] = r * 255; lut[i * 3 + 1] = g * 255; lut[i * 3 + 2] = b * 255;
+    }
+    return lut;
+  })();
+  function colorFor(z, zmin, zmax) {
+    let t = (z - zmin) / Math.max(1e-6, zmax - zmin); t = t < 0 ? 0 : t > 1 ? 1 : t;
+    const i = Math.round(t * 255) * 3; return 'rgb(' + TURBO[i] + ',' + TURBO[i + 1] + ',' + TURBO[i + 2] + ')';
+  }
+
+  /* ---------- device connection ---------- */
+  async function connect() {
+    if (st.connected) return;
+    setBanner('');
+    let transport;
+    try {
+      if (settings.sim) {
+        transport = new A.SimTransport({ mode: '30m15f' });
+        log('模擬センサーで接続します（実機ではありません）', 'warn');
+      } else {
+        if (!navigator.usb) { setBanner('このブラウザではUSB機器に接続できません。Android版Chromeで、https のページとして開いてください。', true); return; }
+        const dev = await navigator.usb.requestDevice({ filters: [{ vendorId: A.USB_VID, productId: A.USB_PID }, { vendorId: A.USB_VID }] });
+        st.usbDevice = dev;
+        transport = new UsbTransport(dev);
+        await transport.open();
+      }
+    } catch (e) {
+      if (e && /No device selected|cancel/i.test(e.message)) { log('機器の選択が取り消されました'); return; }
+      log('接続に失敗: ' + e.message, 'error');
+      setBanner('接続に失敗しました: ' + e.message + '（USBケーブル・OTG対応・給電を確認してください）', true);
+      return;
+    }
+    await initDevice(transport);
+  }
+  async function initDevice(transport) {
+    st.transport = transport;
+    const proto = new A.AsDt1Protocol(transport, log);
+    st.proto = proto; proto.onFrame = onFrame;
+    proto.onUnsolicited = (s) => { if (s.trim()) log('機器からの通知: ' + s); };
+    transport.onClose = onTransportClosed;
+    setChip('chipConn', '接続処理中', 'busy');
+    try {
+      await proto.drain(300);
+      await proto.cmd('fsync 0');
+      let ver = A.parseVer(await proto.cmd('ver'));
+      if (!ver.version) { await sleep(600); ver = A.parseVer(await proto.cmd('ver')); }
+      st.info.ver = ver;
+      if (!ver.version) log('ver の応答が読めません。接続が正しいか確認してください', 'warn');
+      if (ver.errors.length) { log('機器が異常を報告: ' + ver.errors.join(' / '), 'error'); setBanner('機器の自己診断で異常: ' + ver.errors.join(' / '), true); }
+      if (ver.kind && !/cdc/i.test(ver.kind)) {
+        log('ファームウェアの動作モードが CDC ではありません(' + ver.kind + ')', 'error');
+        setBanner('機器の動作モードが「' + ver.kind + '」です。距離計測にはCDCモードが必要です。', true, [{ label: 'CDCモードに切り替える（再起動）', fn: switchToCdc }]);
+      }
+      st.info.sensor = A.parseSensorInfo(await proto.cmd('sensorinfo'));
+      const mode = A.parseFlmode(await proto.cmd('flmode')) || (transport.mode || '30mstd');
+      st.mode = mode; proto.nPoints = (A.MODES[mode] || A.MODES['30mstd']).n;
+      st.info.cstatus = A.parseCstatus(await proto.cmd('cstatus'));
+      st.info.ustatus = (await proto.cmd('ustatus')).map((s) => s.trim()).filter(Boolean);
+      await proto.cmd('format binary' + (settings.imu ? ' imu' : ''));
+      const fmt = A.parseFormat(await proto.cmd('format'));
+      st.info.format = fmt; proto.imuEnabled = fmt.imu === null ? settings.imu : fmt.imu;
+      if (fmt.format && fmt.format !== 'binary') log('出力形式を binary にできませんでした: ' + fmt.format, 'warn');
+      const mp = await proto.getList('mpinfo');
+      st.rects = A.mpinfoToPicture(mp);
+      if (!st.rects) { log('mpinfo が576行ではありません(' + mp.length + ')。規定の格子で表示します', 'warn'); st.rects = A.nominalRects(); }
+      const svm = await proto.getList('svminfo');
+      st.svm = A.svmToPicture(svm);
+      if (!st.svm) { log('svminfo が576行ではありません(' + svm.length + ')。公称画角で代用します', 'warn'); st.svm = A.nominalSvm(); }
+      st.rawLists = { mpinfo: mp, svminfo: svm };
+      st.connected = true; st.frameNo = 0;
+      log('接続完了: ' + (ver.model || 'AS-DT1') + ' S/N ' + ver.serial + ' / ' + ver.kind + ' ' + ver.version + ' / レンジ ' + mode + ' / USB ' + (st.info.cstatus.usb || '?'), 'ok');
+      setChip('chipConn', (settings.sim ? '模擬' : 'USB') + ' 接続', 'on');
+      $('#chipMode').hidden = false; $('#chipMode').textContent = mode.toUpperCase();
+      $('#liveEmpty').hidden = true;
+      if (settings.gps) startGps();
+      renderInfo(); updateButtons();
+      if (st.rebooting && st.rebooting.resumeMeasure) { st.rebooting = null; await startMeasure(); }
+      st.rebooting = null;
+    } catch (e) {
+      log('初期化に失敗: ' + e.message, 'error'); setBanner('機器の初期化に失敗しました: ' + e.message, true);
+      await disconnect();
+    }
+  }
+  async function disconnect() {
+    if (st.recording) await stopRecording();
+    if (st.measuring && st.proto) { try { await st.proto.cmd('fsync 0', 800); } catch (e) { /* ignore */ } }
+    st.measuring = false;
+    if (st.transport) { const t = st.transport; st.transport = null; t.onClose = null; try { await t.close(); } catch (e) { /* ignore */ } }
+    st.proto = null; st.connected = false; st.usbDevice = null;
+    stopGps(); keepAwake(false);
+    setChip('chipConn', '未接続', ''); $('#chipMode').hidden = true;
+    renderInfo(); updateButtons();
+    log('切断しました');
+  }
+  async function onTransportClosed(err) {
+    const wasRecording = st.recording;
+    if (st.recording) await stopRecording();
+    st.measuring = false; st.connected = false; st.proto = null; st.transport = null;
+    keepAwake(false);
+    if (st.rebooting) {
+      setChip('chipConn', '再起動待ち', 'busy'); log('機器が再起動中です。再接続を待ちます…');
+      updateButtons();
+      if (settings.sim) { await sleep(1500); const t = new A.SimTransport({ mode: st.rebooting.mode }); await initDevice(t); }
+      else waitForReconnect();
+      return;
+    }
+    setChip('chipConn', '切断', ''); $('#chipMode').hidden = true;
+    log('接続が切れました' + (err ? ': ' + err.message : '') + (wasRecording ? '（記録は保存済み）' : ''), 'warn');
+    setBanner('USB接続が切れました。ケーブルと給電を確認して「接続」を押してください。' + (wasRecording ? ' 記録はここまでの分が保存されています。' : ''), true);
+    stopGps(); updateButtons();
+  }
+  async function waitForReconnect() {
+    const t0 = Date.now(); const serial = st.rebooting && st.rebooting.serial;
+    while (st.rebooting && Date.now() - t0 < 40000) {
+      await sleep(1500);
+      try {
+        const devs = await navigator.usb.getDevices();
+        const dev = devs.find((d) => d.vendorId === A.USB_VID && (!serial || !d.serialNumber || d.serialNumber === serial)) || devs.find((d) => d.vendorId === A.USB_VID);
+        if (dev) { st.usbDevice = dev; const t = new UsbTransport(dev); await t.open(); await initDevice(t); return; }
+      } catch (e) { log('再接続を再試行中: ' + e.message); }
+    }
+    if (st.rebooting) { st.rebooting = null; setChip('chipConn', '未接続', ''); setBanner('再起動後の自動再接続ができませんでした。「接続」を押して選び直してください。', true); updateButtons(); }
+  }
+  if (navigator.usb) {
+    navigator.usb.addEventListener('disconnect', (e) => { if (st.usbDevice && e.device === st.usbDevice && st.transport) { log('USB機器が外れました'); st.transport.running = false; onTransportClosed(new Error('disconnect')); } });
+    navigator.usb.addEventListener('connect', async (e) => {
+      log('USB機器を検出: ' + (e.device.productName || '') + ' ' + (e.device.serialNumber || ''));
+      if (st.rebooting && !st.connected && e.device.vendorId === A.USB_VID) {
+        try { await sleep(800); st.usbDevice = e.device; const t = new UsbTransport(e.device); await t.open(); await initDevice(t); } catch (err) { log('自動再接続に失敗: ' + err.message, 'warn'); }
+      }
+    });
+  }
+
+  /* ---------- measurement ---------- */
+  async function startMeasure() {
+    if (!st.proto || st.measuring) return;
+    const iv = settings.fsync < 0 ? '-1' : String(settings.fsync);
+    await st.proto.cmd('fsync ' + iv);
+    st.measuring = true; st.lastFrameT = 0; st.fps = 0;
+    setChip('chipConn', (settings.sim ? '模擬' : 'USB') + ' 計測中', 'on');
+    if (settings.wake) keepAwake(true);
+    log('連続計測を開始 (fsync ' + iv + ')');
+    updateButtons();
+  }
+  async function stopMeasure() {
+    if (!st.proto) return;
+    if (st.recording) await stopRecording();
+    await st.proto.cmd('fsync 0'); st.measuring = false;
+    setChip('chipConn', (settings.sim ? '模擬' : 'USB') + ' 接続', 'on');
+    keepAwake(false); log('連続計測を停止'); updateButtons();
+  }
+  async function singleShot() { if (!st.proto) return; await st.proto.cmd('t'); log('1コマ撮影 (t)'); }
+
+  function onFrame(f) {
+    st.frameNo++;
+    const now = f.hostEnd;
+    if (st.lastFrameT) { const inst = 1000 / Math.max(1, now - st.lastFrameT); st.fps = st.fps ? st.fps * 0.8 + inst * 0.2 : inst; }
+    st.lastFrameT = now;
+    st.frame = f;
+    const raw = A.unpackXYZ(f.mp, f.nPoints);
+    st.pic = A.toPicture(raw, f.nPoints, { useSecond: settings.second, flipTable: settings.flipTable });
+    st.stats = frameStats(st.pic, f);
+    rowOrderCheck(raw, f.nPoints);
+    if (f.imu.length) { const r = A.decodeImu(f.imu[f.imu.length - 1]); st.imuLast = r; const g = Math.hypot(r.ax, r.ay, r.az); st.tilt = g > 0.2 ? Math.atan2(Math.abs(r.az), Math.abs(r.ax)) * 180 / Math.PI : NaN; }
+    if (st.recording && recorder.rec) {
+      recorder.write(A.buildFrameRecord(f, st.frameNo, (A.MODES[st.mode] || {}).code || 0, st.gps), true);
+    }
+    scheduleDraw();
+  }
+
+  // One-time self check of the row mapping: with the right table, neighbouring picture rows differ less than rows 12 apart.
+  const roc = { n: 0, done: false, a: 0, b: 0 };
+  function rowOrderCheck(raw, nPoints) {
+    if (roc.done || nPoints !== 576) return;
+    const pA = A.toPicture(raw, nPoints, { useSecond: false, flipTable: false }), pB = A.toPicture(raw, nPoints, { useSecond: false, flipTable: true });
+    const score = (pic) => { let s = 0, n = 0; for (let r = 0; r < 23; r++) for (let c = 0; c < 24; c++) { const k = r * 24 + c; if (pic.flag[k] && pic.flag[k + 24]) { s += Math.abs(pic.pts[k * 3 + 2] - pic.pts[(k + 24) * 3 + 2]); n++; } } return n > 200 ? s / n : NaN; };
+    const a = score(pA), b = score(pB); if (isNaN(a) || isNaN(b)) return;
+    roc.a += a; roc.b += b; roc.n++;
+    if (roc.n >= 10) {
+      roc.done = true; const ratio = roc.a / Math.max(1e-6, roc.b);
+      log('並び替え表の自己診断: 隣り合う行の距離差 通常=' + (roc.a / roc.n).toFixed(0) + 'mm / 反転=' + (roc.b / roc.n).toFixed(0) + 'mm → ' + (ratio < 1 ? '通常の表で整合（想定どおり）' : '反転の方が滑らかです。設定「並び替え表を反転」を試してください') , ratio < 1 ? 'ok' : 'warn');
+      if (ratio >= 1 && !settings.flipTable) setBanner('距離画像の行並びが不自然な可能性があります。設定の「並び替え表を反転」を試し、見え方が自然な方を使ってください（記録データは影響を受けません）。');
+    }
+  }
+  function frameStats(pic, f) {
+    const z = []; let n2 = 0;
+    for (let k = 0; k < 576; k++) { if (pic.flag[k]) { z.push(pic.pts[k * 3 + 2]); if (pic.flag[k] === 2) n2++; } }
+    z.sort((a, b) => a - b);
+    const n = z.length; const q = (p) => n ? z[Math.min(n - 1, Math.floor(p * (n - 1)))] : NaN;
+    return { nValid: n, nTotal: f.nPoints, second: n2, med: q(0.5), min: n ? z[0] : NaN, max: n ? z[n - 1] : NaN, p02: q(0.02), p98: q(0.98), temp: f.temp };
+  }
+
+  /* ---------- recording ---------- */
+  function nextRecName() {
+    let n = 1; try { n = parseInt(localStorage.getItem('asdt1.recno') || '1', 10) || 1; } catch (e) { /* ignore */ }
+    try { localStorage.setItem('asdt1.recno', String(n + 1)); } catch (e) { /* ignore */ }
+    const d = new Date(); const p = (x) => String(x).padStart(2, '0');
+    return (settings.prefix || 'REC') + String(n).padStart(3, '0') + '_' + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '_' + p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds());
+  }
+  async function startRecording() {
+    if (!st.connected || st.recording) return;
+    if (!st.measuring) await startMeasure();
+    const name = nextRecName();
+    const meta = {
+      format: 'ASDT1LOG', version: 1, app: 'AS-DT1 Mobile ' + A.APP_VERSION, created: new Date().toISOString(), createdEpochMs: Date.now(),
+      timezoneOffsetMin: -new Date().getTimezoneOffset(), name,
+      device: { model: st.info.ver.model || 'AS-DT1', serial: st.info.ver.serial || '', firmware: st.info.ver.version || '', firmwareKind: st.info.ver.kind || '', settingVersion: st.info.ver.settingVersion || '', moduleSN: st.info.sensor.moduleSN || '', mode: st.mode, modeCode: (A.MODES[st.mode] || {}).code || 0, nPoints: (A.MODES[st.mode] || {}).n || 576, outputFormat: 'binary', imu: !!(st.proto && st.proto.imuEnabled), usb: st.info.cstatus.usb || '', simulation: !!settings.sim },
+      fsync: settings.fsync, userAgent: navigator.userAgent,
+      mpinfo: st.rawLists ? st.rawLists.mpinfo.map((l) => l.split(',').map(Number)) : null,
+      svminfo: st.rawLists ? st.rawLists.svminfo.map((l) => l.split(',').map(Number)) : null,
+      axes: { sensor: 'X=down, Y=left, Z=forward, unit 0.25mm (20-bit)', pointOrder: 'measurement output order (raw, as sent by the device); raw index j lands at picture index MPDATATBL[j] (Sony SDK _MPDATATBL / API manual p.11)', hostTime: 'hostEpochMs = phone clock (ms) when the frame (incl. IMU footer) finished arriving' },
+      recordLayout: { header: 'ADT1 magic u32, type u8 (1 frame,2 gps,3 marker,4 info), ver u8, reserved u16, payloadLen u32', frame: 'frameNo u32, hostEpochMs f64, hostMonoMs f64, tm u32, ts u32, temp i16, modeCode u8, flags u8, nPoints u16, nImu u16, tmEnd u32, tsEnd u32, gpsEpochMs f64, lat f64, lon f64, alt f32, acc f32, speed f32, heading f32, mp[nPoints*15], imu[nImu*16]', gps: 'epochMs f64, lat f64, lon f64, alt f32, acc f32, speed f32, heading f32, altAcc f32', text: 'epochMs f64, utf8' }
+    };
+    try {
+      const rec = await recorder.start(name, A.buildLogHeader(meta));
+      st.recording = true; st.recMeta = rec.meta;
+      recorder.write(A.buildTextRecord(A.REC_INFO, Date.now(), JSON.stringify({ event: 'start', mode: st.mode, fsync: settings.fsync })));
+      if (st.gps) recorder.write(A.buildGpsRecord(st.gps));
+      $('#chipRec').hidden = false;
+      log('記録開始: ' + name + (recorder.backend === 'opfs' ? '' : recorder.backend === 'idb' ? '（IndexedDB保存）' : '（メモリ保存）'), 'ok');
+    } catch (e) { log('記録を開始できません: ' + e.message, 'error'); setBanner('記録を開始できません: ' + e.message, true); }
+    updateButtons();
+  }
+  async function stopRecording() {
+    if (!st.recording) return;
+    st.recording = false;
+    recorder.write(A.buildTextRecord(A.REC_INFO, Date.now(), JSON.stringify({ event: 'stop' })));
+    const meta = await recorder.stop();
+    $('#chipRec').hidden = true;
+    if (meta) log('記録終了: ' + meta.name + ' ' + meta.frames + 'コマ ' + fmtBytes(meta.bytes), 'ok');
+    updateButtons(); if (ui.tab === 'rec') renderRecords();
+  }
+  function addMarker(text) {
+    const t = Date.now();
+    log('マーカー: ' + text + (st.gps ? ' @' + st.gps.lat.toFixed(5) + ',' + st.gps.lon.toFixed(5) : ''), 'ok');
+    if (st.recording) recorder.write(A.buildTextRecord(A.REC_MARK, t, text));
+    else log('（記録中ではないため、マーカーはログにのみ残ります）', 'warn');
+  }
+
+  /* ---------- GPS ---------- */
+  function startGps() {
+    if (st.gpsWatch != null || !navigator.geolocation) { if (!navigator.geolocation) log('この環境ではGPSが使えません', 'warn'); return; }
+    $('#chipGps').hidden = false; $('#chipGps').textContent = 'GPS 待機';
+    st.gpsWatch = navigator.geolocation.watchPosition((p) => {
+      const c = p.coords;
+      st.gps = { t: p.timestamp, lat: c.latitude, lon: c.longitude, alt: c.altitude == null ? NaN : c.altitude, acc: c.accuracy == null ? NaN : c.accuracy, speed: c.speed == null ? NaN : c.speed, heading: c.heading == null ? NaN : c.heading, altAcc: c.altitudeAccuracy == null ? NaN : c.altitudeAccuracy };
+      if (st.recording) recorder.write(A.buildGpsRecord(st.gps));
+      const chip = $('#chipGps'); chip.className = 'chip gps ' + (c.accuracy <= 15 ? 'fix' : 'poor'); chip.textContent = 'GPS ±' + Math.round(c.accuracy) + 'm';
+      $('#stGps').innerHTML = Math.round(c.accuracy) + '<small>m</small>';
+    }, (e) => { log('GPS: ' + e.message, 'warn'); const chip = $('#chipGps'); chip.className = 'chip gps'; chip.textContent = 'GPS なし'; }, { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 });
+    log('GPSの記録を開始');
+  }
+  function stopGps() { if (st.gpsWatch != null && navigator.geolocation) navigator.geolocation.clearWatch(st.gpsWatch); st.gpsWatch = null; st.gps = null; $('#chipGps').hidden = true; }
+
+  /* ---------- wake lock ---------- */
+  async function keepAwake(on) {
+    if (on) { if (st.wakeLock || !navigator.wakeLock) return; try { st.wakeLock = await navigator.wakeLock.request('screen'); st.wakeLock.addEventListener('release', () => { st.wakeLock = null; }); log('画面の自動消灯を止めました'); } catch (e) { log('画面常時ONにできません: ' + e.message, 'warn'); } }
+    else if (st.wakeLock) { try { await st.wakeLock.release(); } catch (e) { /* ignore */ } st.wakeLock = null; }
+  }
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && st.measuring && settings.wake) keepAwake(true); if (document.visibilityState === 'hidden' && st.recording) log('画面が隠れました。記録中はこの画面を前面にしておいてください', 'warn'); });
+
+  /* ---------- drawing ---------- */
+  function scheduleDraw() { if (st.drawPending) return; st.drawPending = true; requestAnimationFrame(() => { st.drawPending = false; draw(); }); }
+  function draw() {
+    updateStats();
+    if (ui.tab === 'live') drawDepth();
+    else if (ui.tab === '3d') draw3d();
+    else if (ui.tab === 'profile') drawProfile();
+  }
+  function updateStats() {
+    const s = st.stats; if (!s) return;
+    $('#stFps').textContent = st.fps ? st.fps.toFixed(1) : '--';
+    $('#stValid').innerHTML = (100 * s.nValid / s.nTotal).toFixed(0) + '<small>% ' + s.nValid + '/' + s.nTotal + '</small>';
+    $('#stMed').innerHTML = (isNaN(s.med) ? '--' : (s.med / 1000).toFixed(2)) + '<small>m</small>';
+    $('#stTemp').innerHTML = (isNaN(s.temp) ? '--' : s.temp) + '<small>℃</small>';
+    $('#stRange').innerHTML = isNaN(s.min) ? '--' : (s.min / 1000).toFixed(1) + '–' + (s.max / 1000).toFixed(1) + '<small>m</small>';
+    $('#stTilt').innerHTML = (isNaN(st.tilt) ? '--' : st.tilt.toFixed(0)) + '<small>°</small>';
+    if (st.recording && recorder.rec) $('#stRec').innerHTML = recorder.rec.frames + '<small>コマ ' + fmtBytes(recorder.rec.bytes) + '</small>'; else $('#stRec').textContent = st.recording ? '…' : '--';
+    if (settings.colorAuto && s.nValid > 10) {
+      const lo = Math.max(0, s.p02 / 1000 - 0.2), hi = s.p98 / 1000 + 0.2;
+      st.colorMin = st.colorMin ? st.colorMin * 0.9 + lo * 0.1 : lo; st.colorMax = st.colorMax ? st.colorMax * 0.9 + hi * 0.1 : hi;
+      if (st.colorMax - st.colorMin < 0.5) st.colorMax = st.colorMin + 0.5;
+    } else if (!settings.colorAuto) { st.colorMin = settings.colorMin; st.colorMax = settings.colorMax; }
+    $('#lgMin').textContent = st.colorMin.toFixed(1) + ' m'; $('#lgMax').textContent = st.colorMax.toFixed(1) + ' m';
+  }
+  function fitCanvas(cv, aspect) {
+    const w = cv.clientWidth || cv.parentElement.clientWidth || 360; const h = Math.round(w * aspect);
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); cv.style.height = h + 'px'; }
+    return { w: cv.width, h: cv.height, dpr };
+  }
+  function drawDepth() {
+    const cv = $('#depth'); const { w, h } = fitCanvas(cv, A.SPAD_H / A.SPAD_W);
+    const ctx = cv.getContext('2d');
+    ctx.fillStyle = getCss('--canvas'); ctx.fillRect(0, 0, w, h);
+    if (!st.pic || !st.rects) { ctx.fillStyle = '#8a9a92'; ctx.font = Math.round(h / 16) + 'px ' + getCss('--font'); ctx.textAlign = 'center'; ctx.fillText(st.connected ? '「計測開始」を押してください' : '未接続', w / 2, h / 2); return; }
+    const sx = w / A.SPAD_W, sy = h / A.SPAD_H;
+    // each measurement point is drawn as a tile centred on its true position on the sensor; tile = 92% of the grid pitch
+    const cw = A.SPAD_W / 24 * 0.92 * sx, ch = A.SPAD_H / 24 * 0.92 * sy;
+    const pts = st.pic.pts, flag = st.pic.flag;
+    for (let k = 0; k < 576; k++) {
+      const r = st.rects[k]; const x = (r.x + r.w / 2) * sx - cw / 2, y = (r.y + r.h / 2) * sy - ch / 2;
+      if (!flag[k]) { ctx.fillStyle = '#2f3a36'; ctx.fillRect(x, y, cw, ch); continue; }
+      ctx.fillStyle = colorFor(pts[k * 3 + 2] / 1000, st.colorMin, st.colorMax); ctx.fillRect(x, y, cw, ch);
+      if (flag[k] === 2) { ctx.fillStyle = 'rgba(255,255,255,.75)'; ctx.fillRect(x + cw / 2 - 1.5, y + ch / 2 - 1.5, 3, 3); }
+    }
+    if (st.selected >= 0) { const r = st.rects[st.selected]; ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.strokeRect((r.x + r.w / 2) * sx - cw / 2 - 1.5, (r.y + r.h / 2) * sy - ch / 2 - 1.5, cw + 3, ch + 3); }
+  }
+  function camPoints() { // picture order -> camera axes (x right, y up, z forward) in metres
+    const out = []; if (!st.pic) return out;
+    const p = st.pic.pts, f = st.pic.flag;
+    for (let k = 0; k < 576; k++) if (f[k]) out.push({ x: -p[k * 3 + 1] / 1000, y: -p[k * 3] / 1000, z: p[k * 3 + 2] / 1000, k });
+    return out;
+  }
+  function draw3d() {
+    const cv = $('#view3d'); const { w, h } = fitCanvas(cv, 0.9);
+    const ctx = cv.getContext('2d'); ctx.fillStyle = getCss('--canvas'); ctx.fillRect(0, 0, w, h);
+    const pts = camPoints();
+    if (!pts.length) { ctx.fillStyle = '#8a9a92'; ctx.font = Math.round(h / 20) + 'px ' + getCss('--font'); ctx.textAlign = 'center'; ctx.fillText('データ待ち', w / 2, h / 2); return; }
+    let cx = 0, cy = 0, cz = 0; for (const p of pts) { cx += p.x; cy += p.y; cz += p.z; } cx /= pts.length; cy /= pts.length; cz /= pts.length;
+    if (!ui.orbit.dist) { const d = pts.map((p) => Math.hypot(p.x - cx, p.y - cy, p.z - cz)).sort((a, b) => a - b); ui.orbit.dist = d[Math.floor(d.length * 0.75)] * 2.0 + 0.5; }
+    const az = ui.orbit.az, el = ui.orbit.el, d = ui.orbit.dist;
+    const ca = Math.cos(az), sa = Math.sin(az), ce = Math.cos(el), se = Math.sin(el);
+    const f = 1.2 * Math.min(w, h);
+    let ymin = Infinity, ymax = -Infinity, zmin = Infinity, zmax = -Infinity; for (const p of pts) { ymin = Math.min(ymin, p.y); ymax = Math.max(ymax, p.y); zmin = Math.min(zmin, p.z); zmax = Math.max(zmax, p.z); }
+    const proj = (x, y, z) => { // orbit camera around centroid; view from behind-above the sensor by default
+      x -= cx; y -= cy; z -= cz;
+      const x1 = x * ca - z * sa, z1 = x * sa + z * ca;           // yaw around vertical axis
+      const y2 = y * ce - z1 * se, z2 = y * se + z1 * ce + d;     // pitch
+      if (z2 <= 0.05) return null; const s = f / z2; return [w / 2 + x1 * s, h / 2 - y2 * s, s];
+    };
+    // axes from sensor origin
+    const O = proj(0, 0, 0);
+    const axes = [[1, 0, 0, '#ff7a7a', '+x 右'], [0, 1, 0, '#7aff9d', '+y 上'], [0, 0, 1, '#7ab8ff', '+z 前']];
+    ctx.lineWidth = 2; ctx.font = Math.round(h / 32) + 'px ' + getCss('--font');
+    for (const a of axes) { const P = proj(a[0], a[1], a[2]); if (O && P) { ctx.strokeStyle = a[3]; ctx.beginPath(); ctx.moveTo(O[0], O[1]); ctx.lineTo(P[0], P[1]); ctx.stroke(); ctx.fillStyle = a[3]; ctx.fillText(a[4], P[0] + 4, P[1]); } }
+    const sorted = pts.map((p) => ({ p, q: proj(p.x, p.y, p.z) })).filter((e) => e.q).sort((a, b) => a.q[2] - b.q[2]);
+    for (const e of sorted) {
+      const v = ui.color3d === 'h' ? (e.p.y - ymin) / Math.max(1e-6, ymax - ymin) : (e.p.z - zmin) / Math.max(1e-6, zmax - zmin);
+      ctx.fillStyle = colorFor(v, 0, 1); const r = Math.max(1.5, e.q[2] * 0.025); ctx.fillRect(e.q[0] - r, e.q[1] - r, 2 * r, 2 * r);
+    }
+    $('#info3d').textContent = '点数 ' + pts.length + '、高さの幅 ' + (ymax - ymin).toFixed(2) + ' m、前方 ' + zmin.toFixed(1) + '–' + zmax.toFixed(1) + ' m';
+  }
+  function drawProfile() {
+    const cv = $('#profile'); const { w, h } = fitCanvas(cv, 0.8);
+    const ctx = cv.getContext('2d'); ctx.fillStyle = getCss('--canvas'); ctx.fillRect(0, 0, w, h);
+    const pts = camPoints();
+    if (!pts.length) { ctx.fillStyle = '#8a9a92'; ctx.font = Math.round(h / 20) + 'px ' + getCss('--font'); ctx.textAlign = 'center'; ctx.fillText('データ待ち', w / 2, h / 2); return; }
+    const side = ui.profile === 'side';
+    const X = (p) => side ? p.z : p.x, Y = (p) => side ? p.y : p.z, C = (p) => side ? p.x : p.y;
+    let xmin = 0, xmax = 0, ymin = 0, ymax = 0, cmin = Infinity, cmax = -Infinity;
+    for (const p of pts) { xmin = Math.min(xmin, X(p)); xmax = Math.max(xmax, X(p)); ymin = Math.min(ymin, Y(p)); ymax = Math.max(ymax, Y(p)); cmin = Math.min(cmin, C(p)); cmax = Math.max(cmax, C(p)); }
+    const pad = 0.5; xmin -= pad; xmax += pad; ymin -= pad; ymax += pad;
+    const m = { l: 38, r: 10, t: 10, b: 28 }; const pw = w - m.l - m.r, ph = h - m.t - m.b;
+    const sc = Math.min(pw / (xmax - xmin), ph / (ymax - ymin));
+    const ox = m.l + (pw - (xmax - xmin) * sc) / 2 - xmin * sc, oy = m.t + (ph - (ymax - ymin) * sc) / 2 + ymax * sc;
+    const px = (x) => ox + x * sc, py = (y) => oy - y * sc;
+    // grid every 1 m (5 m emphasised)
+    const fpx = Math.round(Math.min(w, h) / 30); ctx.font = fpx + 'px ' + getCss('--font'); ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    const lblStep = sc < fpx * 1.6 ? 5 : 1; // label every metre only when there is room
+    for (let x = Math.ceil(xmin); x <= xmax; x++) { ctx.strokeStyle = x % 5 === 0 ? '#44524d' : '#222b28'; ctx.beginPath(); ctx.moveTo(px(x), m.t); ctx.lineTo(px(x), h - m.b); ctx.stroke(); if (x % lblStep === 0) { ctx.fillStyle = '#9fb0a8'; ctx.fillText(x + '', px(x), h - m.b + 4); } }
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    for (let y = Math.ceil(ymin); y <= ymax; y++) { ctx.strokeStyle = y % 5 === 0 ? '#44524d' : '#222b28'; ctx.beginPath(); ctx.moveTo(m.l, py(y)); ctx.lineTo(w - m.r, py(y)); ctx.stroke(); if (y % lblStep === 0) { ctx.fillStyle = '#9fb0a8'; ctx.fillText(y + '', m.l - 4, py(y)); } }
+    // sensor origin
+    ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(px(0), py(0), 4, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#c9d6d0'; ctx.textAlign = 'left'; ctx.fillText('センサ', px(0) + 6, py(0));
+    for (const p of pts) { ctx.fillStyle = colorFor(C(p), cmin, cmax); ctx.fillRect(px(X(p)) - 1.5, py(Y(p)) - 1.5, 3, 3); }
+    ctx.fillStyle = '#c9d6d0'; ctx.textAlign = 'right'; ctx.textBaseline = 'top';
+    ctx.fillText(side ? '横: 前方距離 [m]  縦: 上下 [m]  色: 左右' : '横: 左右 [m]  縦: 前方距離 [m]  色: 上下', w - m.r - 4, m.t + 4);
+  }
+  function getCss(v) { return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+
+  /* ---------- depth tap ---------- */
+  $('#depth').addEventListener('pointerdown', (ev) => {
+    if (!st.rects || !st.pic) return;
+    const cv = ev.currentTarget; const b = cv.getBoundingClientRect();
+    const X = (ev.clientX - b.left) / b.width * A.SPAD_W, Y = (ev.clientY - b.top) / b.height * A.SPAD_H;
+    let best = -1, bd = 1e9;
+    for (let k = 0; k < 576; k++) { const r = st.rects[k]; const dx = X - (r.x + r.w / 2), dy = Y - (r.y + r.h / 2); const dd = dx * dx + dy * dy; if (dd < bd) { bd = dd; best = k; } }
+    st.selected = best; showPoint(best); scheduleDraw();
+  });
+  function showPoint(k) {
+    if (k < 0 || !st.pic) return;
+    const p = st.pic.pts, f = st.pic.flag[k];
+    const row = Math.floor(k / 24) + 1, col = (k % 24) + 1;
+    if (!f) { $('#pointInfo').textContent = '行' + row + ' 列' + col + '：測れていない点'; return; }
+    $('#pointInfo').textContent = '行' + row + ' 列' + col + (f === 2 ? '（第2反射）' : '') + '： 右 ' + (-p[k * 3 + 1] / 1000).toFixed(2) + ' m、上 ' + (-p[k * 3] / 1000).toFixed(2) + ' m、前方 ' + (p[k * 3 + 2] / 1000).toFixed(2) + ' m';
+  }
+
+  /* ---------- 3D orbit touch ---------- */
+  (function () {
+    const cv = $('#view3d'); let drag = null, pinch = null;
+    cv.addEventListener('pointerdown', (e) => { cv.setPointerCapture(e.pointerId); if (!drag) drag = { id: e.pointerId, x: e.clientX, y: e.clientY }; else pinch = { id: e.pointerId, x: e.clientX, y: e.clientY, d0: Math.hypot(e.clientX - drag.x, e.clientY - drag.y), dist0: ui.orbit.dist }; });
+    cv.addEventListener('pointermove', (e) => {
+      if (pinch && (e.pointerId === pinch.id || e.pointerId === drag.id)) { if (e.pointerId === pinch.id) { pinch.x = e.clientX; pinch.y = e.clientY; } else { drag.x = e.clientX; drag.y = e.clientY; } const d = Math.hypot(pinch.x - drag.x, pinch.y - drag.y); ui.orbit.dist = Math.max(0.5, pinch.dist0 * pinch.d0 / Math.max(10, d)); scheduleDraw(); return; }
+      if (drag && e.pointerId === drag.id) { ui.orbit.az += (e.clientX - drag.x) * 0.01; ui.orbit.el = Math.max(-1.4, Math.min(1.4, ui.orbit.el + (e.clientY - drag.y) * 0.01)); drag.x = e.clientX; drag.y = e.clientY; scheduleDraw(); }
+    });
+    const up = (e) => { if (pinch && e.pointerId === pinch.id) pinch = null; else if (drag && e.pointerId === drag.id) { drag = pinch ? { id: pinch.id, x: pinch.x, y: pinch.y } : null; pinch = null; } };
+    cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+    cv.addEventListener('wheel', (e) => { e.preventDefault(); ui.orbit.dist = Math.max(0.5, ui.orbit.dist * Math.exp(e.deltaY * 0.001)); scheduleDraw(); }, { passive: false });
+    $('#btn3dReset').addEventListener('click', () => { ui.orbit = { az: -0.6, el: 0.45, dist: 0 }; scheduleDraw(); });
+    $('#seg3dColor').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; $$('#seg3dColor button').forEach((x) => x.classList.toggle('active', x === b)); ui.color3d = b.dataset.v; settings.color3d = ui.color3d; saveSettings(); scheduleDraw(); });
+    $('#segProfile').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; $$('#segProfile button').forEach((x) => x.classList.toggle('active', x === b)); ui.profile = b.dataset.v; settings.profile = ui.profile; saveSettings(); scheduleDraw(); });
+    $$('#seg3dColor button').forEach((x) => x.classList.toggle('active', x.dataset.v === ui.color3d));
+    $$('#segProfile button').forEach((x) => x.classList.toggle('active', x.dataset.v === ui.profile));
+  })();
+
+  /* ---------- info panel ---------- */
+  function renderInfo() {
+    const v = st.info.ver || {}, s = st.info.sensor || {}, c = st.info.cstatus || {};
+    const rows = [];
+    if (!st.connected) rows.push(['状態', '未接続']);
+    else {
+      rows.push(['状態', (settings.sim ? '模擬センサー' : 'USB') + ' 接続中'], ['型番 / 製造番号', (v.model || '-') + ' / ' + (v.serial || '-')], ['ファームウェア', (v.kind || '') + ' ' + (v.version || '-')], ['設定データ版', v.settingVersion || '-'], ['センサモジュール S/N', s.moduleSN || '-'], ['製造日 / レーザーロット', (s['manufacturing date'] || '-') + ' / ' + (s['laser lot'] || '-')], ['累積稼働 / ショット数', (isNaN(v.opeHours) ? '-' : v.opeHours + ' 時間') + ' / ' + (isNaN(v.shotsK) ? '-' : v.shotsK + ' 千回')], ['USB / UART', (c.usb || '-') + ' / ' + (c.uart || '-')], ['給電 (ustatus)', (st.info.ustatus || []).join(' / ') || '-'], ['異常', v.errors && v.errors.length ? v.errors.join(' / ') : 'なし']);
+    }
+    $('#kvDevice').innerHTML = rows.map((r) => '<div>' + esc(r[0]) + '</div><div>' + esc(r[1]) + '</div>').join('');
+    const f = st.info.format || {};
+    const rows2 = [['測定レンジ', st.mode ? st.mode.toUpperCase() + '（' + ((A.MODES[st.mode] || {}).n || '?') + '点/コマ）' : '-'], ['出力形式', (f.format || '-') + (f.imu === null ? '' : f.imu ? ' + IMU' : '')], ['連続計測の間隔', settings.fsync < 0 ? '最速' : settings.fsync + ' ms'], ['GPS記録', settings.gps ? 'する' : 'しない'], ['表示の第2反射利用', settings.second ? 'する' : 'しない'], ['アプリ版', A.APP_VERSION]];
+    $('#kvSettings').innerHTML = rows2.map((r) => '<div>' + esc(r[0]) + '</div><div>' + esc(r[1]) + '</div>').join('');
+  }
+  $$('#tab-info [data-cmd]').forEach((b) => b.addEventListener('click', () => runConsole(b.dataset.cmd)));
+  $('#consoleSend').addEventListener('click', () => runConsole($('#consoleIn').value.trim()));
+  $('#consoleIn').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); runConsole($('#consoleIn').value.trim()); } });
+  async function runConsole(cmd) {
+    if (!cmd) return;
+    if (!st.proto) { $('#consoleOut').textContent = '未接続です'; return; }
+    if (/^(reboot|erase|erser|factorydefault|flstart|serial|userwr|wrt|vrf)\b/.test(cmd)) { $('#consoleOut').textContent = '「' + cmd + '」は機器の設定や内容を書き換える可能性があるため、このアプリからは送りません。'; return; }
+    $('#consoleOut').textContent = '> ' + cmd + '\n…';
+    const wasMeasuring = st.measuring;
+    const lines = await st.proto.cmd(cmd, 5000);
+    $('#consoleOut').textContent = '> ' + cmd + '\n' + (lines.length ? lines.join('\n') : '（応答なし）');
+    log('コマンド ' + cmd + ' → ' + lines.length + '行');
+    if (cmd === 'ustatus') { st.info.ustatus = lines.map((s) => s.trim()).filter(Boolean); renderInfo(); }
+    void wasMeasuring;
+  }
+
+  /* ---------- records panel ---------- */
+  async function renderRecords() {
+    const list = await recorder.list();
+    const el = $('#recList'); el.innerHTML = '';
+    if (!list.length) el.innerHTML = '<div class="empty">記録はまだありません</div>';
+    for (const m of list) {
+      const d = document.createElement('div'); d.className = 'card recitem';
+      const dur = m.end && m.start ? ((m.end - m.start) / 1000) : (m.lastWrite && m.start ? (m.lastWrite - m.start) / 1000 : 0);
+      d.innerHTML = '<div><div class="name">' + esc(m.name) + (m.memory ? '（メモリ）' : '') + (m.closed ? '' : ' <span class="hint">（途中終了）</span>') + '</div><div class="meta">' + (m.start ? new Date(m.start).toLocaleString('ja-JP') : '') + ' / ' + (m.frames != null ? m.frames + 'コマ' : '') + ' / ' + fmtDur(dur) + ' / ' + fmtBytes(m.bytes || 0) + '</div></div>' +
+        '<div class="acts"><button class="btn small accent" data-act="save">保存 (.asdt1)</button><button class="btn small" data-act="share">共有</button><button class="btn small" data-act="csv">CSV要約</button><button class="btn small" data-act="gpx">GPX</button><button class="btn small danger" data-act="del">削除</button></div>';
+      d.addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) recordAction(b.dataset.act, m.name, b); });
+      el.appendChild(d);
+    }
+    const u = await recorder.usage();
+    if (u && u.quota) { $('#storageInfo').textContent = '使用 ' + fmtBytes(u.usage || 0) + ' / 上限 ' + fmtBytes(u.quota) + '（' + (recorder.backend === 'opfs' ? 'ブラウザ内ファイル' : recorder.backend === 'idb' ? 'IndexedDB' : 'メモリ') + '）'; $('#storageBar').style.width = Math.min(100, 100 * (u.usage || 0) / u.quota) + '%'; }
+    else $('#storageInfo').textContent = recorder.backend === 'memory' ? 'ブラウザ内保存が使えません（メモリ保存）' : '容量: 不明';
+  }
+  async function recordAction(act, name, btn) {
+    try {
+      if (act === 'del') { if (!(await confirmDlg('記録の削除', esc(name) + ' をこの端末から削除します。保存・共有していない場合は元に戻せません。'))) return; await recorder.remove(name); renderRecords(); return; }
+      btn.disabled = true;
+      const blob = await recorder.blobOf(name);
+      if (act === 'save') saveBlob(blob, name + '.asdt1');
+      else if (act === 'share') await shareBlob(blob, name + '.asdt1');
+      else if (act === 'csv') { const p = A.parseLog(await blob.arrayBuffer()); saveBlob(new Blob([csvSummary(p)], { type: 'text/csv' }), name + '_summary.csv'); }
+      else if (act === 'gpx') { const p = A.parseLog(await blob.arrayBuffer()); saveBlob(new Blob([gpxOf(p, name)], { type: 'application/gpx+xml' }), name + '.gpx'); }
+    } catch (e) { log('記録の操作に失敗: ' + e.message, 'error'); setBanner('失敗しました: ' + e.message, true); }
+    finally { btn.disabled = false; }
+  }
+  function saveBlob(blob, filename) {
+    const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = filename; document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 20000);
+    log('ダウンロード: ' + filename + ' (' + fmtBytes(blob.size) + ')', 'ok');
+  }
+  async function shareBlob(blob, filename) {
+    const file = new File([blob], filename, { type: 'application/octet-stream' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: filename }); log('共有: ' + filename, 'ok'); }
+    else { log('この環境ではファイル共有が使えないため、ダウンロードします', 'warn'); saveBlob(blob, filename); }
+  }
+  function csvSummary(p) {
+    const rows = ['frame,host_time_iso,host_epoch_ms,tm_ms,ts,temp_C,n_points,n_valid,z_median_m,z_min_m,z_max_m,lat,lon,gps_acc_m,n_imu'];
+    for (const f of p.frames) {
+      const raw = A.unpackXYZ(f.mp, f.nPoints); const pic = A.toPicture(raw, f.nPoints, { useSecond: settings.second, flipTable: settings.flipTable });
+      const z = []; for (let k = 0; k < 576; k++) if (pic.flag[k]) z.push(pic.pts[k * 3 + 2] / 1000); z.sort((a, b) => a - b);
+      const med = z.length ? z[Math.floor(z.length / 2)] : NaN;
+      rows.push([f.frameNo, new Date(f.hostEnd).toISOString(), f.hostEnd, f.tm, f.ts, f.temp, f.nPoints, z.length, isNaN(med) ? '' : med.toFixed(3), z.length ? z[0].toFixed(3) : '', z.length ? z[z.length - 1].toFixed(3) : '', isNaN(f.lat) ? '' : f.lat.toFixed(7), isNaN(f.lon) ? '' : f.lon.toFixed(7), isNaN(f.acc) ? '' : f.acc.toFixed(1), f.nImu].join(','));
+    }
+    for (const m of p.marks) rows.push('# marker,' + new Date(m.t).toISOString() + ',' + m.t + ',' + JSON.stringify(m.text));
+    return rows.join('\n') + '\n';
+  }
+  function gpxOf(p, name) {
+    const pts = p.gps.length ? p.gps : p.frames.filter((f) => !isNaN(f.lat)).map((f) => ({ t: f.gpsT, lat: f.lat, lon: f.lon, alt: f.alt, acc: f.acc, speed: f.speed }));
+    const seen = new Set(); const out = ['<?xml version="1.0" encoding="UTF-8"?>', '<gpx version="1.1" creator="AS-DT1 Mobile" xmlns="http://www.topografix.com/GPX/1/1">', '<trk><name>' + esc(name) + '</name><trkseg>'];
+    for (const g of pts) { if (seen.has(g.t)) continue; seen.add(g.t); out.push('<trkpt lat="' + g.lat.toFixed(7) + '" lon="' + g.lon.toFixed(7) + '">' + (isNaN(g.alt) ? '' : '<ele>' + g.alt.toFixed(1) + '</ele>') + '<time>' + new Date(g.t).toISOString() + '</time>' + (isNaN(g.acc) ? '' : '<hdop>' + (g.acc / 5).toFixed(1) + '</hdop>') + '</trkpt>'); }
+    out.push('</trkseg></trk>');
+    for (const m of p.marks) { out.push('<wpt lat="0" lon="0"><time>' + new Date(m.t).toISOString() + '</time><name>' + esc(m.text) + '</name></wpt>'); }
+    out.push('</gpx>'); return out.join('\n');
+  }
+  $('#btnRefreshRec').addEventListener('click', renderRecords);
+  $('#btnDeleteAll').addEventListener('click', async () => { if (!(await confirmDlg('すべて削除', 'この端末内の記録をすべて削除します。保存・共有していない記録は元に戻せません。'))) return; for (const m of await recorder.list()) { try { await recorder.remove(m.name); } catch (e) { /* ignore */ } } renderRecords(); });
+
+  /* ---------- tabs / buttons / dialogs ---------- */
+  $('#tabs').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; showTab(b.dataset.tab); });
+  function showTab(name) {
+    ui.tab = name; $$('#tabs button').forEach((b) => b.classList.toggle('active', b.dataset.tab === name));
+    $$('main .panel').forEach((p) => { p.hidden = p.id !== 'tab-' + name; });
+    if (name === 'log') renderLog(); if (name === 'rec') renderRecords(); if (name === 'info') renderInfo();
+    scheduleDraw();
+  }
+  $('#btnConnect').addEventListener('click', () => { if (st.connected) disconnect(); else connect(); });
+  $('#btnMeasure').addEventListener('click', () => { if (st.measuring) stopMeasure(); else startMeasure(); });
+  $('#btnRecord').addEventListener('click', () => { if (st.recording) stopRecording(); else startRecording(); });
+  $('#btnSingle').addEventListener('click', singleShot);
+  $('#btnMark').addEventListener('click', () => { $('#markText').value = ''; $('#dlgMark').showModal(); });
+  $('#markQuick').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; $('#dlgMark').close(); addMarker(b.dataset.text); });
+  $('#formMark').addEventListener('submit', (e) => { e.preventDefault(); const t = $('#markText').value.trim() || 'マーカー'; $('#dlgMark').close(); addMarker(t); });
+  $('#markCancel').addEventListener('click', () => $('#dlgMark').close());
+  $('#btnSettings').addEventListener('click', openSettings);
+  $('#setCancel').addEventListener('click', () => $('#dlgSettings').close());
+  $('#formSettings').addEventListener('submit', (e) => { e.preventDefault(); applySettings(); });
+  function openSettings() {
+    const sel = $('#setMode'); sel.innerHTML = Object.keys(A.MODES).map((k) => '<option value="' + k + '">' + k.toUpperCase() + '　' + A.MODES[k].label + '</option>').join('');
+    sel.value = st.mode || '30m15f'; sel.disabled = !st.connected;
+    $('#setFsync').value = String(settings.fsync); $('#setImu').checked = settings.imu; $('#setGps').checked = settings.gps; $('#setWake').checked = settings.wake; $('#setSecond').checked = settings.second;
+    $('#setFlip').checked = settings.flipTable; $('#setColorAuto').checked = settings.colorAuto; $('#setColorMin').value = settings.colorMin; $('#setColorMax').value = settings.colorMax; $('#setPrefix').value = settings.prefix; $('#setSim').checked = settings.sim;
+    $('#dlgSettings').showModal();
+  }
+  async function applySettings() {
+    const prevImu = settings.imu, prevSim = settings.sim;
+    settings.fsync = parseFloat($('#setFsync').value); settings.imu = $('#setImu').checked; settings.gps = $('#setGps').checked; settings.wake = $('#setWake').checked; settings.second = $('#setSecond').checked;
+    settings.colorAuto = $('#setColorAuto').checked; settings.colorMin = parseFloat($('#setColorMin').value) || 0; settings.colorMax = parseFloat($('#setColorMax').value) || 30; settings.prefix = ($('#setPrefix').value.trim() || 'REC').replace(/[^\w-]/g, ''); settings.sim = $('#setSim').checked; settings.flipTable = $('#setFlip').checked;
+    saveSettings(); $('#dlgSettings').close();
+    const newMode = $('#setMode').value;
+    if (st.connected) {
+      if (settings.gps && st.gpsWatch == null) startGps(); if (!settings.gps) stopGps();
+      if (prevSim !== settings.sim) { await disconnect(); return; }
+      if (settings.imu !== prevImu && st.proto) { const wasM = st.measuring; if (wasM) await st.proto.cmd('fsync 0'); await st.proto.cmd('format binary' + (settings.imu ? ' imu' : '')); const fmt = A.parseFormat(await st.proto.cmd('format')); st.info.format = fmt; st.proto.imuEnabled = fmt.imu === null ? settings.imu : fmt.imu; if (wasM) await st.proto.cmd('fsync ' + (settings.fsync < 0 ? '-1' : settings.fsync)); }
+      else if (st.measuring && st.proto) await st.proto.cmd('fsync ' + (settings.fsync < 0 ? '-1' : settings.fsync));
+      if (newMode && newMode !== st.mode) await changeMode(newMode);
+    }
+    renderInfo(); scheduleDraw();
+  }
+  async function changeMode(m) {
+    if (!st.proto || !A.MODES[m]) return;
+    if (!(await confirmDlg('測定レンジの変更', '測定レンジを ' + m.toUpperCase() + ' に切り替えます。機器が再起動し、USB接続が一度切れます（自動で再接続を試みます）。記録中の場合は記録を終了します。'))) return;
+    const resume = st.measuring;
+    if (st.recording) await stopRecording();
+    await st.proto.cmd('fsync 0');
+    const r = await st.proto.cmd('flmode ' + m);
+    if (r.join(' ').includes('illegal')) { log('flmode が受け付けられませんでした: ' + r.join(' '), 'error'); return; }
+    st.rebooting = { mode: m, serial: st.info.ver.serial, resumeMeasure: resume, t: Date.now() };
+    log('レンジを ' + m + ' に設定し、機器を再起動します');
+    st.measuring = false;
+    await st.proto.send('reboot');
+    setChip('chipConn', '再起動中', 'busy'); updateButtons();
+    setTimeout(() => { if (st.rebooting && !st.connected && st.transport) { const t = st.transport; st.transport = null; t.onClose = null; t.close(); onTransportClosed(new Error('reboot')); } }, 2500);
+  }
+  function confirmDlg(title, html) {
+    return new Promise((resolve) => {
+      const d = $('#dlgConfirm'); $('#confirmTitle').textContent = title; $('#confirmText').innerHTML = html;
+      const yes = $('#confirmYes'), no = $('#confirmNo');
+      const done = (v) => { yes.onclick = no.onclick = null; d.close(); resolve(v); };
+      yes.onclick = () => done(true); no.onclick = () => done(false); d.onclose = () => resolve(false);
+      d.showModal();
+    });
+  }
+  function updateButtons() {
+    const c = st.connected;
+    $('#btnConnect').textContent = c ? '切断' : '接続'; $('#btnConnect').classList.toggle('primary', !c);
+    $('#btnMeasure').disabled = !c; $('#btnMeasure').textContent = st.measuring ? '計測停止' : '計測開始'; $('#btnMeasure').classList.toggle('primary', c && !st.measuring);
+    $('#btnRecord').disabled = !c; $('#btnRecord').textContent = st.recording ? '■ 記録停止' : '● 記録'; $('#btnRecord').classList.toggle('active', st.recording);
+    $('#btnSingle').disabled = !c || st.measuring; $('#btnMark').disabled = !c;
+  }
+  function setChip(id, text, cls) { const el = $('#' + id); el.textContent = text; el.className = 'chip ' + (cls || ''); }
+  function setBanner(text, bad, actions) {
+    const b = $('#banner'); if (!text) { b.hidden = true; return; }
+    b.hidden = false; b.className = 'banner' + (bad ? ' bad' : ''); b.innerHTML = esc(text) + ' ';
+    for (const a of (actions || [])) { const btn = document.createElement('button'); btn.className = 'btn small accent'; btn.textContent = a.label; btn.addEventListener('click', () => { b.hidden = true; a.fn(); }); b.appendChild(btn); b.appendChild(document.createTextNode(' ')); }
+    const c = document.createElement('button'); c.className = 'btn small'; c.textContent = '閉じる'; c.addEventListener('click', () => { b.hidden = true; }); b.appendChild(c);
+  }
+  async function switchToCdc() {
+    if (!st.proto) return;
+    if (!(await confirmDlg('CDCモードへ切り替え', '機器の動作モードを CDC（USBで距離計測）に書き換えて再起動します。Sonyのサンプルアプリと同じ手順（flstart cdc → reboot）です。'))) return;
+    const r = await st.proto.cmd('flstart cdc');
+    if (r.join(' ').includes('illegal')) { log('flstart cdc が受け付けられませんでした: ' + r.join(' '), 'error'); return; }
+    st.rebooting = { mode: st.mode || '30mstd', serial: st.info.ver.serial, resumeMeasure: false, t: Date.now() };
+    log('動作モードを CDC に設定し、機器を再起動します');
+    await st.proto.send('reboot');
+    setChip('chipConn', '再起動中', 'busy'); updateButtons();
+    setTimeout(() => { if (st.rebooting && st.transport) { const t = st.transport; st.transport = null; t.onClose = null; t.close(); onTransportClosed(new Error('reboot')); } }, 2500);
+  }
+  function esc(s) { return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+  function fmtBytes(b) { if (b < 1024) return b + ' B'; if (b < 1048576) return (b / 1024).toFixed(0) + ' KB'; return (b / 1048576).toFixed(1) + ' MB'; }
+  function fmtDur(s) { s = Math.round(s); return Math.floor(s / 60) + '分' + String(s % 60).padStart(2, '0') + '秒'; }
+  function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
+  $('#btnCopyLog').addEventListener('click', async () => { const text = LOG.map((l) => l.t + ' ' + l.msg).join('\n'); try { await navigator.clipboard.writeText(text); log('ログをコピーしました', 'ok'); } catch (e) { const r = document.createRange(); r.selectNodeContents($('#logView')); const s = getSelection(); s.removeAllRanges(); s.addRange(r); log('長押しでコピーしてください', 'warn'); } });
+  $('#btnClearLog').addEventListener('click', () => { LOG.length = 0; renderLog(); });
+  window.addEventListener('resize', scheduleDraw);
+  window.addEventListener('beforeunload', (e) => { if (st.recording) { e.preventDefault(); e.returnValue = ''; recorder.flush(); } });
+
+  /* ---------- startup checks ---------- */
+  (function startup() {
+    log('AS-DT1 Mobile ' + A.APP_VERSION + ' 起動 / ' + navigator.userAgent);
+    const issues = [];
+    if (!window.isSecureContext) issues.push('安全な接続（https）ではないため、USBとGPSが使えません。https で開き直してください。');
+    if (window.top !== window.self) issues.push('この画面は別ページに埋め込まれています。USB接続は単独のタブで開いたときだけ使えます。');
+    if (!navigator.usb) issues.push('このブラウザはWebUSBに対応していません（Android版Chromeを使ってください）。');
+    if (!/Android/i.test(navigator.userAgent)) issues.push('Android以外では、USB機器が別のドライバーに占有されて接続できないことがあります。');
+    if (issues.length) setBanner(issues.join(' '), !navigator.usb || !window.isSecureContext);
+    renderInfo(); updateButtons(); showTab('live');
+    if (/[?#]sim/.test(location.href)) { settings.sim = true; }
+  })();
+  window.__asdt1 = { st, settings, recorder, connect, disconnect, startMeasure, stopMeasure, startRecording, stopRecording, addMarker, renderRecords, showTab, LOG };
+})();
+
+</script>
+</body>
+</html>
